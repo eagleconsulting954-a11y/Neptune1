@@ -1,3 +1,9 @@
+// Import and initialize Vercel Web Analytics
+import { inject } from '@vercel/analytics';
+
+// Initialize analytics tracking
+inject();
+
 const PAGES = [
   'Dashboard','Fleet Overview','Vessels','Vessel Profile','Voyages','Navigation','Cargo','Port Calls','Crew List','Crew Certificates','Watch Schedule','PMS','Work Orders','Machinery','PTW Register','Inspections','Incidents','eORB','Inventory','Critical Quotes','Certificates','Agent Desk','Analytics','Settings'
 ];
