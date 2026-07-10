@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./admin-logo.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM",
-  description: "A premium vessel command, delegation, maintenance, safety, compliance, and fleet CRM platform."
+  description: "A premium vessel command, delegation, maintenance, safety, compliance, CRM, and analytics platform."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
