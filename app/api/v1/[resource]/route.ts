@@ -14,6 +14,7 @@ function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "UNKNOWN";
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (message === "NOT_FOUND") return NextResponse.json({ error: "Unknown resource" }, { status: 404 });
+  if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "Persistent database is not configured. Add DATABASE_URL before creating real records." }, { status: 503 });
   console.error(error);
   return NextResponse.json({ error: "Unable to complete request" }, { status: 500 });
 }
