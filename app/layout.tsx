@@ -3,7 +3,7 @@ import "./globals.css";
 import "./admin-logo.css";
 
 export const metadata: Metadata = {
-  title: "Neptune — Vessel Command CRM",
+  title: "Neptune — Vessel Command CRM & Analytics",
   description: "A premium vessel command, delegation, maintenance, safety, compliance, CRM, and analytics platform."
 };
 
