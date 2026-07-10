@@ -13,6 +13,7 @@ type Account = {
 };
 
 type AdminData = {
+  storageMode: "postgres" | "unconfigured";
   organization: { id: string; role: string; email?: string };
   summary: Record<string, number>;
   stages: { name: string; count: number; value: number }[];
@@ -44,7 +45,13 @@ export function AdminDashboard() {
       setLoading(false);
       return;
     }
-    setData(await response.json());
+    const payload = await response.json();
+    if (!response.ok) {
+      setMessage(payload.error || "Unable to load administrator data.");
+      setLoading(false);
+      return;
+    }
+    setData(payload);
     setLoading(false);
   }
 
@@ -63,6 +70,8 @@ export function AdminDashboard() {
   const stageOptions = useMemo(() => ["All stages", ...Array.from(new Set((data?.crm || []).map(account => account.stage || "Unassigned")))], [data]);
   const maxPipeline = Math.max(...(data?.trend || []).map(item => item.pipeline), 1);
   const maxStage = Math.max(...(data?.stages || []).map(item => item.value), 1);
+  const databaseReady = data?.storageMode === "postgres";
+  const hasPipelineData = (data?.trend || []).some(item => item.pipeline > 0);
 
   async function saveAccount(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -90,22 +99,32 @@ export function AdminDashboard() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: account.id, stage: nextStage })
     });
-    if (response.ok) {
-      setMessage(`${account.company} moved to ${nextStage}.`);
-      await load();
+    const result = await response.json();
+    if (!response.ok) {
+      setMessage(result.error || "Unable to update the opportunity stage.");
+      return;
     }
+    setMessage(`${account.company} moved to ${nextStage}.`);
+    await load();
   }
 
   async function removeAccount(account: Account) {
     if (!window.confirm(`Delete ${account.company}?`)) return;
     const response = await fetch(`/api/v1/crm_accounts?id=${encodeURIComponent(account.id)}`, { method: "DELETE" });
-    if (response.ok) {
-      setMessage("CRM account deleted.");
-      await load();
+    const result = await response.json();
+    if (!response.ok) {
+      setMessage(result.error || "Unable to delete the CRM account.");
+      return;
     }
+    setMessage("CRM account deleted.");
+    await load();
   }
 
   function exportCsv() {
+    if (!accounts.length) {
+      setMessage("There are no real CRM records to export yet.");
+      return;
+    }
     const columns = ["Company", "Contact", "Email", "Stage", "Annual Value"];
     const rows = accounts.map(account => [account.company, account.contact || "", account.email || "", account.stage || "", String(account.annual_value || 0)]);
     const csv = [columns, ...rows].map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
@@ -142,11 +161,13 @@ export function AdminDashboard() {
       <section className="admin-main">
         <header className="admin-topbar">
           <div><p className="eyebrow">Administrator Workspace</p><h1>CRM & analytics command.</h1></div>
-          <div className="actions"><button className="btn" onClick={load}>Refresh data</button><button className="btn" onClick={exportCsv}>Export CRM</button><button className="btn gold" onClick={() => setModal(blankAccount)}>Add account</button></div>
+          <div className="actions"><button className="btn" onClick={load}>Refresh data</button><button className="btn" onClick={exportCsv}>Export CRM</button><button className="btn gold" disabled={!databaseReady} onClick={() => setModal(blankAccount)}>Add account</button></div>
         </header>
 
         {message && <div className="form-message admin-message">{message}</div>}
         {loading || !data ? <section className="admin-loading glass"><div className="radar" /><p>Loading Neptune administration data...</p></section> : <>
+          {!databaseReady && <section className="admin-panel glass production-warning"><p className="eyebrow">Production database required</p><h2>No demo data is being shown.</h2><p className="muted">Connect a PostgreSQL database with the <code>DATABASE_URL</code> environment variable. Neptune will then display only records created by your organization and persist every CRM, fleet, duty, certificate, incident, and activity record.</p></section>}
+
           <section className="admin-kpis" id="overview">
             <Metric label="CRM accounts" value={data.summary.accounts} />
             <Metric label="Total pipeline" value={`$${Number(data.summary.pipeline).toLocaleString()}`} />
@@ -158,13 +179,13 @@ export function AdminDashboard() {
 
           <section className="admin-grid" id="analytics">
             <article className="admin-panel glass premium admin-wide">
-              <div className="admin-panel-head"><div><p className="eyebrow">Pipeline Analytics</p><h2>Commercial momentum</h2></div><span className="status">Live CRM data</span></div>
-              <div className="trend-chart">{data.trend.map(item => <div className="trend-column" key={item.month}><div className="trend-bar-wrap"><div className="trend-bar" style={{height:`${Math.max(10, item.pipeline / maxPipeline * 100)}%`}}><span>${Math.round(item.pipeline / 1000)}k</span></div></div><b>{item.month}</b></div>)}</div>
+              <div className="admin-panel-head"><div><p className="eyebrow">Pipeline Analytics</p><h2>Commercial momentum</h2></div><span className="status">Actual CRM records</span></div>
+              {hasPipelineData ? <div className="trend-chart">{data.trend.map(item => <div className="trend-column" key={item.month}><div className="trend-bar-wrap"><div className="trend-bar" style={{height:`${Math.max(4, item.pipeline / maxPipeline * 100)}%`}}><span>${Math.round(item.pipeline / 1000)}k</span></div></div><b>{item.month}</b></div>)}</div> : <EmptyState title="No pipeline history yet" body="Add real CRM opportunities to begin building monthly analytics." />}
             </article>
 
             <article className="admin-panel glass premium">
               <div className="admin-panel-head"><div><p className="eyebrow">Stage Distribution</p><h2>Pipeline health</h2></div></div>
-              <div className="stage-list">{data.stages.map(item => <div className="stage-row" key={item.name}><div><b>{item.name}</b><span>{item.count} account{item.count === 1 ? "" : "s"}</span></div><div className="stage-track"><i style={{width:`${Math.max(8, item.value / maxStage * 100)}%`}} /></div><strong>${Number(item.value).toLocaleString()}</strong></div>)}</div>
+              {data.stages.length ? <div className="stage-list">{data.stages.map(item => <div className="stage-row" key={item.name}><div><b>{item.name}</b><span>{item.count} account{item.count === 1 ? "" : "s"}</span></div><div className="stage-track"><i style={{width:`${Math.max(8, item.value / maxStage * 100)}%`}} /></div><strong>${Number(item.value).toLocaleString()}</strong></div>)}</div> : <EmptyState title="No stage data" body="Your CRM pipeline is empty." />}
             </article>
 
             <article className="admin-panel glass premium">
@@ -175,12 +196,12 @@ export function AdminDashboard() {
 
           <section className="admin-panel glass premium" id="crm">
             <div className="admin-panel-head admin-crm-head"><div><p className="eyebrow">CRM Administration</p><h2>Accounts and opportunities</h2></div><div className="crm-tools"><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search company, contact, or email" /><select value={stage} onChange={event => setStage(event.target.value)}>{stageOptions.map(option => <option key={option}>{option}</option>)}</select></div></div>
-            <div className="data-grid admin-table"><table><thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Stage</th><th>Annual value</th><th>Actions</th></tr></thead><tbody>{accounts.map(account => <tr key={account.id}><td><b>{account.company}</b></td><td>{account.contact || "—"}</td><td>{account.email || "—"}</td><td><select className="table-select" value={account.stage || "Qualified"} onChange={event => changeStage(account, event.target.value)}><option>Lead</option><option>Qualified</option><option>Demo booked</option><option>Proposal</option><option>Negotiation</option><option>Won</option><option>Lost</option></select></td><td>${Number(account.annual_value || 0).toLocaleString()}</td><td><div className="actions"><button className="btn" onClick={() => setModal(account)}>Edit</button><button className="btn danger" onClick={() => removeAccount(account)}>Delete</button></div></td></tr>)}</tbody></table></div>
+            {accounts.length ? <div className="data-grid admin-table"><table><thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Stage</th><th>Annual value</th><th>Actions</th></tr></thead><tbody>{accounts.map(account => <tr key={account.id}><td><b>{account.company}</b></td><td>{account.contact || "—"}</td><td>{account.email || "—"}</td><td><select className="table-select" value={account.stage || "Qualified"} onChange={event => changeStage(account, event.target.value)}><option>Lead</option><option>Qualified</option><option>Demo booked</option><option>Proposal</option><option>Negotiation</option><option>Won</option><option>Lost</option></select></td><td>${Number(account.annual_value || 0).toLocaleString()}</td><td><div className="actions"><button className="btn" onClick={() => setModal(account)}>Edit</button><button className="btn danger" onClick={() => removeAccount(account)}>Delete</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No CRM accounts" body={databaseReady ? "Add your first real customer or opportunity." : "Connect PostgreSQL before creating persistent CRM records."} />}
           </section>
 
           <section className="admin-panel glass premium" id="activity">
             <div className="admin-panel-head"><div><p className="eyebrow">Audit Stream</p><h2>Recent platform activity</h2></div></div>
-            <div className="admin-activity">{data.recentActivity.length ? data.recentActivity.map(event => <div key={event.id}><span className="activity-dot" /><div><b>{event.label}</b><p>{event.body || "Operational event recorded."}</p></div><small>{event.actor || "Neptune"}</small></div>) : <p className="muted">No recent activity recorded.</p>}</div>
+            <div className="admin-activity">{data.recentActivity.length ? data.recentActivity.map(event => <div key={event.id}><span className="activity-dot" /><div><b>{event.label}</b><p>{event.body || "Operational event recorded."}</p></div><small>{event.actor || "Neptune"}</small></div>) : <EmptyState title="No activity yet" body="Real platform activity will appear here as your team uses Neptune." />}</div>
           </section>
         </>}
       </section>
@@ -192,4 +213,8 @@ export function AdminDashboard() {
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return <article className="admin-metric glass premium"><span>{label}</span><b>{value}</b><i /></article>;
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return <div className="admin-empty"><div className="icon">✦</div><h3>{title}</h3><p>{body}</p></div>;
 }
