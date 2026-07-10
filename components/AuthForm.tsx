@@ -11,7 +11,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     setLoading(true);
     setMessage("");
     const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries(form.entries());
+    const payload: Record<string, FormDataEntryValue | string> = Object.fromEntries(form.entries());
+    if (mode === "login") payload.from = new URLSearchParams(window.location.search).get("from") || "/dashboard";
     const res = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok) {
