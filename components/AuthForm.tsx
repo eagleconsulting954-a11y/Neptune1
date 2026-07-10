@@ -25,9 +25,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <form className="form" onSubmit={submit}>
-      {mode === "signup" && <><label>Organization<input name="organization" required placeholder="Atlantic Fleet Group" /></label><label>Your name<input name="name" required placeholder="Captain or fleet manager" /></label></>}
-      <label>Email<input name="email" type="email" required defaultValue={mode === "login" ? "admin@neptune.local" : ""} /></label>
-      <label>Password<input name="password" type="password" required minLength={8} defaultValue={mode === "login" ? "neptune-admin" : ""} /></label>
+      {mode === "signup" && <><label>Organization<input name="organization" required placeholder="Your company or fleet organization" /></label><label>Your name<input name="name" required placeholder="Captain, fleet manager, or administrator" /></label></>}
+      <label>Email<input name="email" type="email" required autoComplete="email" placeholder="you@company.com" /></label>
+      <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="Minimum 8 characters" /></label>
       <button className="btn gold" disabled={loading}>{loading ? "Please wait..." : mode === "login" ? "Enter Neptune" : "Create workspace"}</button>
       {message && <div className="form-message error">{message}</div>}
     </form>
