@@ -21,9 +21,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, redirect });
   }
 
-  const demoEmail = (process.env.DEMO_ADMIN_EMAIL || "admin@neptune.local").toLowerCase();
-  const demoPassword = process.env.DEMO_ADMIN_PASSWORD || "neptune-admin";
-  if (email === demoEmail && password === demoPassword) {
+  const demoEnabled = process.env.ALLOW_DEMO_LOGIN === "true";
+  const demoEmail = process.env.DEMO_ADMIN_EMAIL?.toLowerCase();
+  const demoPassword = process.env.DEMO_ADMIN_PASSWORD;
+  if (demoEnabled && demoEmail && demoPassword && email === demoEmail && password === demoPassword) {
     await setSession({ userId: "usr_demo", orgId: "org_demo", role: "admin", email: demoEmail });
     return NextResponse.json({ ok: true, redirect });
   }
