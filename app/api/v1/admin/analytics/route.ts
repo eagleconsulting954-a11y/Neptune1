@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { dashboard } from "@/src/lib/server/db";
 
+function monthKey(value: string | Date) {
+  const date = new Date(value);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function recentMonths(count = 6) {
+  const months: { key: string; label: string }[] = [];
+  const today = new Date();
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
+    const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - offset, 1));
+    months.push({ key: monthKey(date), label: date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }) });
+  }
+  return months;
+}
+
 export async function GET() {
   try {
     const session = await requireSession();
@@ -9,6 +24,7 @@ export async function GET() {
 
     const data = await dashboard(session.orgId);
     const crm = data.crm || [];
+    const events = data.events || [];
     const stages = crm.reduce((acc: Record<string, { count: number; value: number }>, account: any) => {
       const stage = account.stage || "Unassigned";
       acc[stage] ||= { count: 0, value: 0 };
@@ -21,11 +37,20 @@ export async function GET() {
     const won = crm.filter((account: any) => String(account.stage).toLowerCase().includes("won"));
     const weightedPipeline = crm.reduce((sum: number, account: any) => {
       const stage = String(account.stage || "").toLowerCase();
-      const probability = stage.includes("won") ? 1 : stage.includes("proposal") ? .7 : stage.includes("demo") ? .5 : stage.includes("qualified") ? .35 : .15;
+      const probability = stage.includes("won") ? 1 : stage.includes("negotiation") ? .85 : stage.includes("proposal") ? .7 : stage.includes("demo") ? .5 : stage.includes("qualified") ? .35 : .15;
       return sum + Number(account.annual_value || 0) * probability;
     }, 0);
 
+    const trend = recentMonths().map(month => ({
+      month: month.label,
+      pipeline: crm
+        .filter((account: any) => account.created_at && monthKey(account.created_at) === month.key)
+        .reduce((sum: number, account: any) => sum + Number(account.annual_value || 0), 0),
+      activity: events.filter((event: any) => event.created_at && monthKey(event.created_at) === month.key).length
+    }));
+
     return NextResponse.json({
+      storageMode: data.storageMode,
       organization: { id: session.orgId, role: session.role, email: session.email },
       summary: {
         accounts: crm.length,
@@ -46,15 +71,8 @@ export async function GET() {
         { label: "Expiring certificates", value: data.kpis.expiringCertificates, suffix: "" },
         { label: "Open incidents", value: data.kpis.openIncidents, suffix: "" }
       ],
-      trend: [
-        { month: "Feb", pipeline: Math.round(pipeline * .44), activity: 22 },
-        { month: "Mar", pipeline: Math.round(pipeline * .57), activity: 31 },
-        { month: "Apr", pipeline: Math.round(pipeline * .69), activity: 38 },
-        { month: "May", pipeline: Math.round(pipeline * .78), activity: 47 },
-        { month: "Jun", pipeline: Math.round(pipeline * .91), activity: 58 },
-        { month: "Jul", pipeline, activity: Math.max(64, (data.events || []).length * 14) }
-      ],
-      recentActivity: (data.events || []).slice(0, 8)
+      trend,
+      recentActivity: events.slice(0, 8)
     });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
