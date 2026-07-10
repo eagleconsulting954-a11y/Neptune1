@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./admin-logo.css";
+import "./dashboard-admin-link.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Analytics",
