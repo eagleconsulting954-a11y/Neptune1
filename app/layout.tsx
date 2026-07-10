@@ -3,10 +3,11 @@ import "./globals.css";
 import "./admin-logo.css";
 import "./dashboard-admin-link.css";
 import "./real-data.css";
+import "./demo.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Analytics",
-  description: "A premium vessel command, delegation, maintenance, safety, compliance, CRM, and analytics platform."
+  description: "A premium vessel command, delegation, maintenance, safety, compliance, CRM, analytics, and interactive demo platform."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
