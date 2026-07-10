@@ -17,41 +17,13 @@ function database() {
   return pool;
 }
 
-const now = () => new Date().toISOString();
-const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+function requireDatabase() {
+  const db = database();
+  if (!db) throw new Error("DATABASE_REQUIRED");
+  return db;
+}
 
-const memory: Record<ResourceName, Row[]> = {
-  vessels: [
-    { id: "vsl_001", org_id: "org_demo", name: "MT Atlantic Pioneer", vessel_type: "Tanker", imo: "9040011", status: "En route", readiness: 92, eta: "Santos +38h", created_at: now() },
-    { id: "vsl_002", org_id: "org_demo", name: "MV Pacific Meridian", vessel_type: "Container", imo: "9040012", status: "Voyage ops", readiness: 88, eta: "Singapore 4d", created_at: now() },
-    { id: "vsl_003", org_id: "org_demo", name: "MT Aurora Spirit", vessel_type: "Product tanker", imo: "9040013", status: "At anchor", readiness: 81, eta: "Houston hold", created_at: now() }
-  ],
-  duties: [
-    { id: "dty_001", org_id: "org_demo", vessel_id: "vsl_001", category: "Hot Work", title: "Hot work permit HW-104", owner: "Chief Officer", location: "Engine workshop", status: "Master approval", severity: "critical", due_at: "Today 16:00", created_at: now() },
-    { id: "dty_002", org_id: "org_demo", vessel_id: "vsl_003", category: "Inspection", title: "Aux generator inspection", owner: "2nd Engineer", location: "Engine room", status: "Evidence needed", severity: "attention", due_at: "Tomorrow", created_at: now() },
-    { id: "dty_003", org_id: "org_demo", vessel_id: "vsl_002", category: "Inspection", title: "Main deck safety round", owner: "Bosun", location: "Main deck", status: "Open", severity: "normal", due_at: "Today 18:00", created_at: now() }
-  ],
-  work_orders: [
-    { id: "wo_001", org_id: "org_demo", vessel_id: "vsl_003", title: "Aux generator cooling leak", owner: "Chief Engineer", status: "Parts pending", priority: "high", due_at: "Tomorrow", created_at: now() }
-  ],
-  certificates: [
-    { id: "cert_001", org_id: "org_demo", vessel_id: "vsl_002", name: "IOPP Certificate", issuer: "Class Society", expires_at: "2026-08-01", status: "Expiring", created_at: now() }
-  ],
-  incidents: [
-    { id: "inc_001", org_id: "org_demo", vessel_id: "vsl_001", title: "Near miss during stores transfer", severity: "low", status: "RCA open", owner: "Safety Officer", created_at: now() }
-  ],
-  crm_accounts: [
-    { id: "crm_001", org_id: "org_demo", company: "Atlantic Bulk Lines", contact: "Maria Santos", email: "ops@atlantic.example", stage: "Demo booked", annual_value: 96000, created_at: now() },
-    { id: "crm_002", org_id: "org_demo", company: "HarborBridge Logistics", contact: "David Chen", email: "fleet@harborbridge.example", stage: "Qualified", annual_value: 42000, created_at: now() }
-  ],
-  activity_events: [
-    { id: "evt_001", org_id: "org_demo", label: "PTW #0047 submitted", body: "Awaiting Master signature", actor: "Chief Mate", created_at: now() },
-    { id: "evt_002", org_id: "org_demo", label: "Certificate pack validated", body: "No blocking errors", actor: "System", created_at: now() }
-  ],
-  subscriptions: [
-    { id: "sub_demo", org_id: "org_demo", stripe_customer_id: null, stripe_subscription_id: null, plan: "fleetops", status: "active", current_period_end: null, created_at: now() }
-  ]
-};
+const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 const resourceConfig: Record<ResourceName, { prefix: string; fields: string[] }> = {
   vessels: { prefix: "vsl", fields: ["name", "vessel_type", "imo", "status", "readiness", "eta"] },
@@ -66,7 +38,7 @@ const resourceConfig: Record<ResourceName, { prefix: string; fields: string[] }>
 
 export async function ensureSchema() {
   const db = database();
-  if (!db) return { ok: true, mode: "memory" };
+  if (!db) return { ok: false, mode: "unconfigured" };
   await db.query(`
     create table if not exists organizations (
       id text primary key,
@@ -167,14 +139,24 @@ export async function ensureSchema() {
       current_period_end text,
       created_at timestamptz not null default now()
     );
-    insert into organizations(id,name,plan,status) values('org_demo','Neptune Fleet Group','fleetops','active') on conflict (id) do nothing;
   `);
+
+  await db.query(`
+    delete from activity_events where id in ('evt_001','evt_002');
+    delete from crm_accounts where id in ('crm_001','crm_002') or email like '%.example';
+    delete from incidents where id='inc_001';
+    delete from certificates where id='cert_001';
+    delete from work_orders where id='wo_001';
+    delete from duties where id in ('dty_001','dty_002','dty_003');
+    delete from vessels where id in ('vsl_001','vsl_002','vsl_003');
+    delete from subscriptions where id='sub_demo';
+  `);
+
   return { ok: true, mode: "postgres" };
 }
 
 export async function sql<T extends Row = Row>(text: string, params: any[] = []): Promise<T[]> {
-  const db = database();
-  if (!db) return [];
+  const db = requireDatabase();
   await ensureSchema();
   const result = await db.query(text, params);
   return result.rows as T[];
@@ -185,18 +167,15 @@ export function hasDatabase() {
 }
 
 export async function listResource(resource: ResourceName, orgId: string) {
-  if (!database()) return memory[resource].filter(row => row.org_id === orgId);
+  if (!database()) return [];
   return sql(`select * from ${resource} where org_id=$1 order by created_at desc`, [orgId]);
 }
 
 export async function createResource(resource: ResourceName, orgId: string, input: Row) {
+  requireDatabase();
   const cfg = resourceConfig[resource];
-  const row: Row = { id: uid(cfg.prefix), org_id: orgId, created_at: now() };
+  const row: Row = { id: uid(cfg.prefix), org_id: orgId };
   for (const field of cfg.fields) row[field] = input[field] ?? null;
-  if (!database()) {
-    memory[resource].unshift(row);
-    return row;
-  }
   const fields = ["id", "org_id", ...cfg.fields];
   const values = fields.map(field => row[field]);
   const placeholders = fields.map((_, index) => `$${index + 1}`).join(",");
@@ -205,15 +184,10 @@ export async function createResource(resource: ResourceName, orgId: string, inpu
 }
 
 export async function updateResource(resource: ResourceName, orgId: string, id: string, input: Row) {
+  requireDatabase();
   const cfg = resourceConfig[resource];
   const allowed = cfg.fields.filter(field => Object.prototype.hasOwnProperty.call(input, field));
   if (!allowed.length) throw new Error("No update fields supplied");
-  if (!database()) {
-    const row = memory[resource].find(item => item.id === id && item.org_id === orgId);
-    if (!row) return null;
-    for (const field of allowed) row[field] = input[field];
-    return row;
-  }
   const set = allowed.map((field, index) => `${field}=$${index + 1}`).join(",");
   const values = allowed.map(field => input[field]);
   values.push(id, orgId);
@@ -222,14 +196,7 @@ export async function updateResource(resource: ResourceName, orgId: string, id: 
 }
 
 export async function deleteResource(resource: ResourceName, orgId: string, id: string) {
-  if (!database()) {
-    const index = memory[resource].findIndex(item => item.id === id && item.org_id === orgId);
-    if (index < 0) return false;
-    memory[resource].splice(index, 1);
-    return true;
-  }
-  const db = database();
-  if (!db) return false;
+  const db = requireDatabase();
   await ensureSchema();
   const result = await db.query(`delete from ${resource} where id=$1 and org_id=$2`, [id, orgId]);
   return Boolean(result.rowCount);
@@ -246,8 +213,9 @@ export async function dashboard(orgId: string) {
     listResource("activity_events", orgId),
     listResource("subscriptions", orgId)
   ]);
-  const readiness = Math.round(vessels.reduce((total, vessel) => total + Number(vessel.readiness || 0), 0) / Math.max(vessels.length, 1));
+  const readiness = vessels.length ? Math.round(vessels.reduce((total, vessel) => total + Number(vessel.readiness || 0), 0) / vessels.length) : 0;
   return {
+    storageMode: hasDatabase() ? "postgres" : "unconfigured",
     kpis: {
       vessels: vessels.length,
       openDuties: duties.filter(duty => !["closed", "complete"].includes(String(duty.status).toLowerCase())).length,
@@ -276,11 +244,9 @@ export async function findUserByEmail(email: string) {
 }
 
 export async function createOrganizationAndAdmin(input: { organization: string; name: string; email: string; passwordHash: string }) {
-  if (!database()) throw new Error("DATABASE_URL is required for account registration");
+  const db = requireDatabase();
   const orgId = uid("org");
   const userId = uid("usr");
-  const db = database();
-  if (!db) throw new Error("Database unavailable");
   await ensureSchema();
   const client = await db.connect();
   try {
@@ -299,12 +265,8 @@ export async function createOrganizationAndAdmin(input: { organization: string; 
 }
 
 export async function upsertSubscription(input: { orgId: string; customerId?: string | null; subscriptionId?: string | null; plan: string; status: string; currentPeriodEnd?: string | null }) {
+  requireDatabase();
   const existing = await listResource("subscriptions", input.orgId);
-  if (!database()) {
-    if (existing[0]) Object.assign(existing[0], { stripe_customer_id: input.customerId, stripe_subscription_id: input.subscriptionId, plan: input.plan, status: input.status, current_period_end: input.currentPeriodEnd });
-    else memory.subscriptions.unshift({ id: uid("sub"), org_id: input.orgId, stripe_customer_id: input.customerId, stripe_subscription_id: input.subscriptionId, plan: input.plan, status: input.status, current_period_end: input.currentPeriodEnd, created_at: now() });
-    return;
-  }
   if (existing[0]) {
     await sql("update subscriptions set stripe_customer_id=$1,stripe_subscription_id=$2,plan=$3,status=$4,current_period_end=$5 where id=$6 and org_id=$7", [input.customerId || null, input.subscriptionId || null, input.plan, input.status, input.currentPeriodEnd || null, existing[0].id, input.orgId]);
   } else {
