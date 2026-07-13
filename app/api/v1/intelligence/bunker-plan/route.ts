@@ -42,8 +42,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan, calculation, priceProvider }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
-    console.error(error);
+    if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "DATABASE_URL is required to save real bunkering plans." }, { status: 503 });
+    console.error(error);
     return NextResponse.json({ error: "Unable to calculate or save the bunkering plan." }, { status: 500 });
   }
 }
