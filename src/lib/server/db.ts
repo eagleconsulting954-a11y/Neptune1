@@ -1,6 +1,19 @@
 import { Pool } from "pg";
 
-export type ResourceName = "vessels" | "duties" | "work_orders" | "certificates" | "incidents" | "crm_accounts" | "activity_events" | "subscriptions";
+export type ResourceName =
+  | "vessels"
+  | "duties"
+  | "work_orders"
+  | "certificates"
+  | "incidents"
+  | "crm_accounts"
+  | "activity_events"
+  | "subscriptions"
+  | "ports"
+  | "bunker_plans"
+  | "mrcc_contacts"
+  | "port_congestion_snapshots";
+
 export type Row = Record<string, any>;
 
 let pool: Pool | null = null;
@@ -33,12 +46,29 @@ const resourceConfig: Record<ResourceName, { prefix: string; fields: string[] }>
   incidents: { prefix: "inc", fields: ["vessel_id", "title", "severity", "status", "owner"] },
   crm_accounts: { prefix: "crm", fields: ["company", "contact", "email", "stage", "annual_value"] },
   activity_events: { prefix: "evt", fields: ["label", "body", "actor"] },
-  subscriptions: { prefix: "sub", fields: ["stripe_customer_id", "stripe_subscription_id", "plan", "status", "current_period_end"] }
+  subscriptions: { prefix: "sub", fields: ["stripe_customer_id", "stripe_subscription_id", "plan", "status", "current_period_end"] },
+  ports: {
+    prefix: "port",
+    fields: ["name", "unlocode", "country", "latitude", "longitude", "timezone", "terminal", "max_draft_m", "anchorage_notes", "bunkering_available", "provider_port_id"]
+  },
+  bunker_plans: {
+    prefix: "bunker",
+    fields: ["vessel_id", "departure_port", "destination_port", "bunker_port", "distance_nm", "speed_kn", "daily_consumption_mt", "current_rob_mt", "reserve_percent", "fuel_type", "quantity_required_mt", "price_per_mt", "estimated_cost", "supplier", "eta", "status", "notes"]
+  },
+  mrcc_contacts: {
+    prefix: "mrcc",
+    fields: ["name", "country", "region", "phone", "email", "vhf_channel", "mmsi", "latitude", "longitude", "source_url", "verified_at", "notes"]
+  },
+  port_congestion_snapshots: {
+    prefix: "congestion",
+    fields: ["port_id", "provider", "vessels_in_port", "vessels_waiting", "avg_wait_hours", "congestion_level", "observed_at", "raw_json"]
+  }
 };
 
 export async function ensureSchema() {
   const db = database();
   if (!db) return { ok: false, mode: "unconfigured" };
+
   await db.query(`
     create table if not exists organizations (
       id text primary key,
@@ -139,6 +169,78 @@ export async function ensureSchema() {
       current_period_end text,
       created_at timestamptz not null default now()
     );
+    create table if not exists ports (
+      id text primary key,
+      org_id text not null references organizations(id) on delete cascade,
+      name text not null,
+      unlocode text,
+      country text,
+      latitude double precision,
+      longitude double precision,
+      timezone text,
+      terminal text,
+      max_draft_m numeric,
+      anchorage_notes text,
+      bunkering_available boolean not null default false,
+      provider_port_id text,
+      created_at timestamptz not null default now()
+    );
+    create table if not exists bunker_plans (
+      id text primary key,
+      org_id text not null references organizations(id) on delete cascade,
+      vessel_id text references vessels(id) on delete set null,
+      departure_port text,
+      destination_port text,
+      bunker_port text,
+      distance_nm numeric,
+      speed_kn numeric,
+      daily_consumption_mt numeric,
+      current_rob_mt numeric,
+      reserve_percent numeric,
+      fuel_type text,
+      quantity_required_mt numeric,
+      price_per_mt numeric,
+      estimated_cost numeric,
+      supplier text,
+      eta text,
+      status text not null default 'Draft',
+      notes text,
+      created_at timestamptz not null default now()
+    );
+    create table if not exists mrcc_contacts (
+      id text primary key,
+      org_id text not null references organizations(id) on delete cascade,
+      name text not null,
+      country text,
+      region text,
+      phone text,
+      email text,
+      vhf_channel text,
+      mmsi text,
+      latitude double precision,
+      longitude double precision,
+      source_url text,
+      verified_at text,
+      notes text,
+      created_at timestamptz not null default now()
+    );
+    create table if not exists port_congestion_snapshots (
+      id text primary key,
+      org_id text not null references organizations(id) on delete cascade,
+      port_id text references ports(id) on delete cascade,
+      provider text,
+      vessels_in_port int,
+      vessels_waiting int,
+      avg_wait_hours numeric,
+      congestion_level text,
+      observed_at timestamptz not null default now(),
+      raw_json jsonb,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists idx_ports_org_unlocode on ports(org_id, unlocode);
+    create index if not exists idx_bunker_plans_org_created on bunker_plans(org_id, created_at desc);
+    create index if not exists idx_mrcc_org_region on mrcc_contacts(org_id, region);
+    create index if not exists idx_congestion_port_observed on port_congestion_snapshots(port_id, observed_at desc);
   `);
 
   await db.query(`
@@ -168,7 +270,8 @@ export function hasDatabase() {
 
 export async function listResource(resource: ResourceName, orgId: string) {
   if (!database()) return [];
-  return sql(`select * from ${resource} where org_id=$1 order by created_at desc`, [orgId]);
+  const order = resource === "port_congestion_snapshots" ? "observed_at" : "created_at";
+  return sql(`select * from ${resource} where org_id=$1 order by ${order} desc`, [orgId]);
 }
 
 export async function createResource(resource: ResourceName, orgId: string, input: Row) {
@@ -203,7 +306,7 @@ export async function deleteResource(resource: ResourceName, orgId: string, id: 
 }
 
 export async function dashboard(orgId: string) {
-  const [vessels, duties, workOrders, certificates, incidents, crm, events, subscriptions] = await Promise.all([
+  const [vessels, duties, workOrders, certificates, incidents, crm, events, subscriptions, ports, bunkerPlans, mrccContacts, congestionSnapshots] = await Promise.all([
     listResource("vessels", orgId),
     listResource("duties", orgId),
     listResource("work_orders", orgId),
@@ -211,7 +314,11 @@ export async function dashboard(orgId: string) {
     listResource("incidents", orgId),
     listResource("crm_accounts", orgId),
     listResource("activity_events", orgId),
-    listResource("subscriptions", orgId)
+    listResource("subscriptions", orgId),
+    listResource("ports", orgId),
+    listResource("bunker_plans", orgId),
+    listResource("mrcc_contacts", orgId),
+    listResource("port_congestion_snapshots", orgId)
   ]);
   const readiness = vessels.length ? Math.round(vessels.reduce((total, vessel) => total + Number(vessel.readiness || 0), 0) / vessels.length) : 0;
   return {
@@ -219,12 +326,15 @@ export async function dashboard(orgId: string) {
     kpis: {
       vessels: vessels.length,
       openDuties: duties.filter(duty => !["closed", "complete"].includes(String(duty.status).toLowerCase())).length,
-      critical: duties.filter(duty => duty.severity === "critical").length,
+      critical: duties.filter(duty => String(duty.severity).toLowerCase() === "critical").length,
       readiness,
       openWorkOrders: workOrders.filter(item => String(item.status).toLowerCase() !== "closed").length,
       expiringCertificates: certificates.filter(item => String(item.status).toLowerCase().includes("expir")).length,
       openIncidents: incidents.filter(item => String(item.status).toLowerCase() !== "closed").length,
-      pipeline: crm.reduce((total, item) => total + Number(item.annual_value || 0), 0)
+      pipeline: crm.reduce((total, item) => total + Number(item.annual_value || 0), 0),
+      ports: ports.length,
+      bunkerPlans: bunkerPlans.length,
+      verifiedMrcc: mrccContacts.filter(item => Boolean(item.verified_at)).length
     },
     vessels,
     duties,
@@ -233,7 +343,11 @@ export async function dashboard(orgId: string) {
     incidents,
     crm,
     events,
-    subscriptions
+    subscriptions,
+    ports,
+    bunkerPlans,
+    mrccContacts,
+    congestionSnapshots
   };
 }
 
