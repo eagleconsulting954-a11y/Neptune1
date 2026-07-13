@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createOrganizationAndAdmin, findUserByEmail } from "@/src/lib/server/db";
-import { setSession } from "@/src/lib/server/auth";
+import { setAccessCookie, setSession } from "@/src/lib/server/auth";
+import { startTrial } from "@/src/lib/server/trial";
 
 export async function POST(request: Request) {
   try {
@@ -10,15 +11,35 @@ export async function POST(request: Request) {
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
-    if (!organization || !name || !email || password.length < 8) return NextResponse.json({ error: "Complete all fields and use at least 8 password characters." }, { status: 400 });
-    if (!process.env.DATABASE_URL) return NextResponse.json({ error: "Registration requires DATABASE_URL. Demo login remains available." }, { status: 503 });
-    if (await findUserByEmail(email)) return NextResponse.json({ error: "An account already exists for this email." }, { status: 409 });
+
+    if (!organization || !name || !email || password.length < 8) {
+      return NextResponse.json({ error: "Complete all fields and use at least 8 password characters." }, { status: 400 });
+    }
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Account registration is temporarily unavailable because the production database is not connected." }, { status: 503 });
+    }
+    if (await findUserByEmail(email)) {
+      return NextResponse.json({ error: "An account already exists for this email." }, { status: 409 });
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await createOrganizationAndAdmin({ organization, name, email, passwordHash });
+    const entitlement = await startTrial(result.orgId);
+
     await setSession({ userId: result.userId, orgId: result.orgId, role: "admin", email });
-    return NextResponse.json({ ok: true, redirect: "/checkout" }, { status: 201 });
+    await setAccessCookie(entitlement);
+
+    return NextResponse.json({
+      ok: true,
+      redirect: "/dashboard",
+      trial: {
+        days: 14,
+        startsAt: new Date().toISOString(),
+        endsAt: entitlement.expiresAt
+      }
+    }, { status: 201 });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Unable to create the organization." }, { status: 500 });
+    return NextResponse.json({ error: "Unable to create the organization and start the trial." }, { status: 500 });
   }
 }
