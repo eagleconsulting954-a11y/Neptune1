@@ -9,7 +9,9 @@ export async function GET(request: Request) {
     if (!query || query.length < 2) return NextResponse.json({ error: "A location search of at least two characters is required." }, { status: 400 });
     return NextResponse.json({ results: await geocodeLocation(query) });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN";
+    if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     console.error(error);
-    return NextResponse.json({ error: "Unable to resolve this maritime location." }, { status: 502 });
+    return NextResponse.json({ error: "Unable to resolve this maritime location.", detail: message }, { status: 502 });
   }
 }
