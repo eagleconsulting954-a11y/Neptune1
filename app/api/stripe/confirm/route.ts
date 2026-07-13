@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { upsertSubscription } from "@/src/lib/server/db";
 import { setAccessCookie } from "@/src/lib/server/auth";
+import { normalizePlan, publicPlanAccess } from "@/src/lib/plans";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,6 +16,8 @@ export async function GET(request: Request) {
 
   const subscription = typeof checkout.subscription === "string" ? await stripe.subscriptions.retrieve(checkout.subscription) : checkout.subscription;
   const orgId = checkout.metadata?.orgId;
+  const plan = normalizePlan(checkout.metadata?.plan || "captain");
+  const access = publicPlanAccess(plan);
   const currentPeriodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 86_400_000).toISOString();
 
   if (orgId) {
@@ -22,7 +25,7 @@ export async function GET(request: Request) {
       orgId,
       customerId: typeof checkout.customer === "string" ? checkout.customer : checkout.customer?.id || null,
       subscriptionId: subscription?.id || null,
-      plan: checkout.metadata?.plan || "fleetops",
+      plan,
       status: subscription?.status || "active",
       currentPeriodEnd
     });
@@ -31,7 +34,9 @@ export async function GET(request: Request) {
   await setAccessCookie({
     allowed: true,
     status: "active",
-    plan: checkout.metadata?.plan || "fleetops",
+    plan,
+    planName: access.name,
+    access,
     expiresAt: currentPeriodEnd,
     daysRemaining: Math.max(1, Math.ceil((new Date(currentPeriodEnd).getTime() - Date.now()) / 86_400_000))
   });
