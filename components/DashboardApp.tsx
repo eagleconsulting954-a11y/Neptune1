@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MaritimeIntelligence } from "@/components/MaritimeIntelligence";
 
 const NAV_GROUPS: Record<string, string[]> = {
   Command: ["Command", "Vessels", "CRM"],
+  "Voyage Intelligence": ["Maritime Intel"],
   Operations: ["Delegation", "Maintenance", "Certificates", "Incidents"],
   Workspace: ["Activity", "Billing", "Settings"]
 };
@@ -18,56 +20,57 @@ const RESOURCE_BY_TAB: Record<string, string | null> = {
   Activity: "activity_events",
   Billing: "subscriptions",
   Command: null,
+  "Maritime Intel": null,
   Settings: null
 };
 
 const FORM_FIELDS: Record<string, { key: string; label: string; placeholder?: string; type?: string }[]> = {
   vessels: [
-    { key: "name", label: "Vessel name", placeholder: "MT Atlantic Pioneer" },
+    { key: "name", label: "Vessel name", placeholder: "Vessel name" },
     { key: "vessel_type", label: "Vessel type", placeholder: "Tanker" },
-    { key: "imo", label: "IMO number", placeholder: "9040011" },
+    { key: "imo", label: "IMO number", placeholder: "IMO number" },
     { key: "status", label: "Status", placeholder: "En route" },
     { key: "readiness", label: "Readiness %", type: "number" },
-    { key: "eta", label: "ETA", placeholder: "Santos +38h" }
+    { key: "eta", label: "ETA", placeholder: "Destination and ETA" }
   ],
   duties: [
     { key: "category", label: "Duty type", placeholder: "Hot Work or Inspection" },
-    { key: "title", label: "Duty title", placeholder: "Hot work permit HW-104" },
+    { key: "title", label: "Duty title", placeholder: "Duty title" },
     { key: "owner", label: "Owner", placeholder: "Chief Officer" },
-    { key: "location", label: "Location", placeholder: "Engine workshop" },
+    { key: "location", label: "Location", placeholder: "Work location" },
     { key: "status", label: "Status", placeholder: "Master approval" },
     { key: "severity", label: "Severity", placeholder: "critical" },
     { key: "due_at", label: "Due", placeholder: "Today 16:00" }
   ],
   work_orders: [
-    { key: "title", label: "Work order", placeholder: "Aux generator cooling leak" },
+    { key: "title", label: "Work order", placeholder: "Work order title" },
     { key: "owner", label: "Owner", placeholder: "Chief Engineer" },
     { key: "status", label: "Status", placeholder: "Parts pending" },
     { key: "priority", label: "Priority", placeholder: "high" },
     { key: "due_at", label: "Due", placeholder: "Tomorrow" }
   ],
   certificates: [
-    { key: "name", label: "Certificate", placeholder: "IOPP Certificate" },
+    { key: "name", label: "Certificate", placeholder: "Certificate name" },
     { key: "issuer", label: "Issuer", placeholder: "Class Society" },
     { key: "expires_at", label: "Expiry", type: "date" },
     { key: "status", label: "Status", placeholder: "Current" }
   ],
   incidents: [
-    { key: "title", label: "Incident", placeholder: "Near miss during stores transfer" },
+    { key: "title", label: "Incident", placeholder: "Incident title" },
     { key: "severity", label: "Severity", placeholder: "low" },
     { key: "status", label: "Status", placeholder: "RCA open" },
     { key: "owner", label: "Owner", placeholder: "Safety Officer" }
   ],
   crm_accounts: [
-    { key: "company", label: "Company", placeholder: "Atlantic Bulk Lines" },
-    { key: "contact", label: "Contact", placeholder: "Maria Santos" },
+    { key: "company", label: "Company", placeholder: "Company name" },
+    { key: "contact", label: "Contact", placeholder: "Contact name" },
     { key: "email", label: "Email", type: "email" },
     { key: "stage", label: "Stage", placeholder: "Qualified" },
     { key: "annual_value", label: "Annual value", type: "number" }
   ],
   activity_events: [
     { key: "label", label: "Event", placeholder: "Port package approved" },
-    { key: "body", label: "Details", placeholder: "No blocking errors" },
+    { key: "body", label: "Details", placeholder: "Operational details" },
     { key: "actor", label: "Actor", placeholder: "Captain" }
   ]
 };
@@ -86,12 +89,21 @@ export function DashboardApp() {
   async function load() {
     setLoading(true);
     const res = await fetch("/api/v1/dashboard", { cache: "no-store" });
-    if (res.status === 401) { window.location.href = "/login"; return; }
-    setData(await res.json());
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    const result = await res.json();
+    if (!res.ok) {
+      setMessage(result.error || "Unable to load Neptune data.");
+      setLoading(false);
+      return;
+    }
+    setData(result);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -101,8 +113,14 @@ export function DashboardApp() {
   function itemsFor(resource: string | null) {
     if (!data || !resource) return [];
     const map: Record<string, string> = {
-      vessels: "vessels", duties: "duties", work_orders: "workOrders", certificates: "certificates",
-      incidents: "incidents", crm_accounts: "crm", activity_events: "events", subscriptions: "subscriptions"
+      vessels: "vessels",
+      duties: "duties",
+      work_orders: "workOrders",
+      certificates: "certificates",
+      incidents: "incidents",
+      crm_accounts: "crm",
+      activity_events: "events",
+      subscriptions: "subscriptions"
     };
     return data[map[resource]] || [];
   }
@@ -119,7 +137,10 @@ export function DashboardApp() {
       body: JSON.stringify(body)
     });
     const result = await res.json();
-    if (!res.ok) { setMessage(result.error || "Unable to save"); return; }
+    if (!res.ok) {
+      setMessage(result.error || "Unable to save");
+      return;
+    }
     setModal(null);
     setMessage(modal.item ? "Record updated." : "Record created.");
     await load();
@@ -128,11 +149,33 @@ export function DashboardApp() {
   async function remove(resource: string, id: string) {
     if (!window.confirm("Delete this record?")) return;
     const res = await fetch(`/api/v1/${resource}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (res.ok) { setMessage("Record deleted."); await load(); }
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(result.error || "Unable to delete record.");
+      return;
+    }
+    setMessage("Record deleted.");
+    await load();
   }
 
   function quickDuty(category: string) {
-    setModal({ resource: "duties", title: `New ${category} duty`, item: { category, owner: category === "Hot Work" ? "Chief Officer" : "Safety Officer", status: "Open", severity: category === "Hot Work" ? "critical" : "normal", due_at: "Today" } });
+    setModal({
+      resource: "duties",
+      title: `New ${category} duty`,
+      item: {
+        category,
+        owner: category === "Hot Work" ? "Chief Officer" : "Safety Officer",
+        status: "Open",
+        severity: category === "Hot Work" ? "critical" : "normal",
+        due_at: "Today"
+      }
+    });
+  }
+
+  function chooseTab(next: string) {
+    setTab(next);
+    setMenuOpen(false);
+    setQuery("");
   }
 
   const resource = RESOURCE_BY_TAB[tab];
@@ -144,31 +187,33 @@ export function DashboardApp() {
   }, [data, resource, query]);
 
   const kpis = data?.kpis || {};
+  const isMaritimeIntel = tab === "Maritime Intel";
 
   return (
     <div className={`dashboard-shell ${menuOpen ? "menu-open" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-head"><div className="brand"><span className="brand-mark">✦</span><span>NEPTUNE<small>Vessel Command</small></span></div><button className="menu-btn" onClick={() => setMenuOpen(false)}>×</button></div>
-        <div className="sidebar-current"><b>{tab}</b><span>Active production workspace</span></div>
-        {Object.entries(NAV_GROUPS).map(([group, items]) => <details className="nav-group" open key={group}><summary>{group}<span>{items.length}</span></summary><div className="nav-grid">{items.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setMenuOpen(false); }}>{item}</button>)}</div></details>)}
-        <button className="btn danger" style={{width:"100%",marginTop:16}} onClick={logout}>Logout</button>
+        <div className="sidebar-current"><b>{tab}</b><span>{isMaritimeIntel ? "Weather, ocean, ports, bunkering, and rescue intelligence" : "Active production workspace"}</span></div>
+        {Object.entries(NAV_GROUPS).map(([group, items]) => <details className="nav-group" open key={group}><summary>{group}<span>{items.length}</span></summary><div className="nav-grid">{items.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => chooseTab(item)}>{item}</button>)}</div></details>)}
+        <button className="btn danger" style={{ width: "100%", marginTop: 16 }} onClick={logout}>Logout</button>
       </aside>
       <button className="mobile-scrim" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
       <main className="main">
-        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search current module..." style={{background:"transparent",border:0,outline:0,width:"100%"}} /></div><button className="profile" onClick={() => setTab("Settings")}>FE</button></header>
-        <section className="workspace glass premium">
-          <div className="workspace-header"><div><p className="eyebrow">Production Workspace</p><h1>{tab}</h1><p className="muted">Live organization data, persistent records, role-aware access, and connected billing.</p></div><div className="actions"><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button>{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({resource,title:`New ${tab} record`})}>New record</button>}</div></div>
-          {message && <div className="form-message" style={{marginTop:12}}>{message}</div>}
-          {loading ? <p className="lede">Loading Neptune data...</p> : <>
-            <div className="kpi-grid">
+        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : "Search current module..."} disabled={isMaritimeIntel} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
+        <section className={`workspace glass premium ${isMaritimeIntel ? "maritime-workspace" : ""}`}>
+          {!isMaritimeIntel && <div className="workspace-header"><div><p className="eyebrow">Production Workspace</p><h1>{tab}</h1><p className="muted">Live organization data, persistent records, role-aware access, and connected billing.</p></div><div className="actions"><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button>{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
+          {message && <div className="form-message" style={{ marginTop: 12 }}>{message}</div>}
+          {loading || !data ? <p className="lede">Loading Neptune data...</p> : <>
+            {!isMaritimeIntel && <div className="kpi-grid">
               <div className="kpi"><span>Vessels</span><b>{kpis.vessels || 0}</b></div>
               <div className="kpi"><span>Open duties</span><b>{kpis.openDuties || 0}</b></div>
               <div className="kpi"><span>Critical</span><b>{kpis.critical || 0}</b></div>
               <div className="kpi"><span>Readiness</span><b>{kpis.readiness || 0}%</b></div>
-            </div>
-            {tab === "Command" && <Command data={data} openTab={setTab} />}
+            </div>}
+            {tab === "Command" && <Command data={data} openTab={chooseTab} />}
+            {tab === "Maritime Intel" && <MaritimeIntelligence data={data} refresh={load} notify={setMessage} />}
             {tab === "Settings" && <Settings logout={logout} />}
-            {resource && <ResourceView resource={resource} rows={visible} edit={(item) => setModal({resource,item,title:`Edit ${tab} record`})} remove={(id) => remove(resource,id)} />}
+            {resource && <ResourceView resource={resource} rows={visible} edit={item => setModal({ resource, item, title: `Edit ${tab} record` })} remove={id => remove(resource, id)} />}
           </>}
         </section>
       </main>
@@ -179,6 +224,7 @@ export function DashboardApp() {
 
 function Command({ data, openTab }: { data: any; openTab: (tab: string) => void }) {
   const cards = [
+    ["Maritime Intel", `${data.ports?.length || 0} ports`, "Live weather, ocean forecasts, port congestion, bunker plans, and MRCC contacts"],
     ["Delegation", `${data.duties?.length || 0} duties`, "Hot work and inspection ownership"],
     ["Maintenance", `${data.workOrders?.length || 0} work orders`, "Engineering and PMS queue"],
     ["Certificates", `${data.certificates?.length || 0} certificates`, "Expiry and evidence control"],
@@ -186,11 +232,11 @@ function Command({ data, openTab }: { data: any; openTab: (tab: string) => void 
     ["CRM", `$${Number(data.kpis?.pipeline || 0).toLocaleString()}`, "Commercial pipeline"],
     ["Activity", `${data.events?.length || 0} events`, "Operational audit stream"]
   ];
-  return <div className="record-grid">{cards.map(([title,value,note]) => <button className="record" key={title} onClick={() => openTab(title)} style={{textAlign:"left",color:"inherit",cursor:"pointer"}}><p className="eyebrow">{title}</p><h3>{value}</h3><p>{note}</p><span className="status">Open module</span></button>)}</div>;
+  return <div className="record-grid">{cards.map(([title, value, note]) => <button className="record" key={title} onClick={() => openTab(title)} style={{ textAlign: "left", color: "inherit", cursor: "pointer" }}><p className="eyebrow">{title}</p><h3>{value}</h3><p>{note}</p><span className="status">Open module</span></button>)}</div>;
 }
 
 function Settings({ logout }: { logout: () => void }) {
-  return <div className="record-grid"><article className="record"><p className="eyebrow">Organization</p><h3>Neptune Fleet Group</h3><p>Manage company profile, fleet defaults, and workspace branding.</p><button className="btn" onClick={() => alert("Organization settings will save through the settings API in the next configuration step.")}>Edit profile</button></article><article className="record"><p className="eyebrow">Security</p><h3>Signed sessions</h3><p>HTTP-only session cookies, organization isolation, and protected API routes are active.</p><button className="btn" onClick={() => alert("Invite workflow ready for email provider connection.")}>Invite user</button></article><article className="record"><p className="eyebrow">Account</p><h3>Session controls</h3><p>End the current secure operator session.</p><button className="btn danger" onClick={logout}>Logout</button></article></div>;
+  return <div className="record-grid"><article className="record"><p className="eyebrow">Organization</p><h3>Organization profile</h3><p>Manage company profile, fleet defaults, and workspace branding.</p><button className="btn" onClick={() => alert("Organization settings require the settings API configuration.")}>Edit profile</button></article><article className="record"><p className="eyebrow">Security</p><h3>Signed sessions</h3><p>HTTP-only session cookies, organization isolation, and protected API routes are active.</p><button className="btn" onClick={() => alert("Connect an email provider to activate user invitations.")}>Invite user</button></article><article className="record"><p className="eyebrow">Account</p><h3>Session controls</h3><p>End the current secure operator session.</p><button className="btn danger" onClick={logout}>Logout</button></article></div>;
 }
 
 function ResourceView({ resource, rows, edit, remove }: { resource: string; rows: any[]; edit: (item: any) => void; remove: (id: string) => void }) {
@@ -201,5 +247,5 @@ function ResourceView({ resource, rows, edit, remove }: { resource: string; rows
 
 function RecordModal({ modal, close, save }: { modal: { resource: string; item?: any; title: string }; close: () => void; save: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const fields = FORM_FIELDS[modal.resource] || [];
-  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Neptune Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} required={!["imo","eta","issuer","expires_at","email"].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
+  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Neptune Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} required={!['imo', 'eta', 'issuer', 'expires_at', 'email'].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
 }
