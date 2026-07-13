@@ -5,6 +5,17 @@ const RESET_TTL_MINUTES = 30;
 const REQUEST_WINDOW_MINUTES = 15;
 const MAX_REQUESTS_PER_WINDOW = 3;
 
+type PasswordResetRequestResult =
+  | null
+  | { rateLimited: true; user: Row }
+  | {
+      rateLimited: false;
+      user: Row;
+      token: string;
+      expiresAt: string;
+      resetUrl: string;
+    };
+
 function tokenHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -47,7 +58,7 @@ export async function createPasswordResetRequest(input: {
   email: string;
   appUrl: string;
   requestIp?: string | null;
-}) {
+}): Promise<PasswordResetRequestResult> {
   await ensurePasswordResetSchema();
   const user = await findUserByEmail(input.email);
   if (!user) return null;
