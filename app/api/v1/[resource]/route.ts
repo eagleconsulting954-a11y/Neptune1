@@ -2,7 +2,20 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { createResource, deleteResource, listResource, updateResource, type ResourceName } from "@/src/lib/server/db";
 
-const allowed = new Set<ResourceName>(["vessels", "duties", "work_orders", "certificates", "incidents", "crm_accounts", "activity_events", "subscriptions"]);
+const allowed = new Set<ResourceName>([
+  "vessels",
+  "duties",
+  "work_orders",
+  "certificates",
+  "incidents",
+  "crm_accounts",
+  "activity_events",
+  "subscriptions",
+  "ports",
+  "bunker_plans",
+  "mrcc_contacts",
+  "port_congestion_snapshots"
+]);
 
 async function resourceFrom(context: { params: Promise<{ resource: string }> }) {
   const { resource } = await context.params;
