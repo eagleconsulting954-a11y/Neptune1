@@ -11,8 +11,9 @@ function accessIsValid(value?: string) {
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const protectedRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
-  if (!protectedRoute) return NextResponse.next();
+  const tenantRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
+  const platformRoute = pathname.startsWith("/platform-admin");
+  if (!tenantRoute && !platformRoute) return NextResponse.next();
 
   const session = request.cookies.get("neptune_session_v2")?.value;
   if (!session) {
@@ -20,6 +21,8 @@ export function middleware(request: NextRequest) {
     url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
   }
+
+  if (platformRoute) return NextResponse.next();
 
   const access = request.cookies.get("neptune_access_v1")?.value;
   if (!accessIsValid(access)) {
@@ -31,4 +34,4 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/dashboard/:path*", "/admin/:path*"] };
+export const config = { matcher: ["/dashboard/:path*", "/admin/:path*", "/platform-admin/:path*"] };
