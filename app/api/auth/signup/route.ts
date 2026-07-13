@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { createOrganizationAndAdmin, findUserByEmail } from "@/src/lib/server/db";
 import { setAccessCookie, setSession } from "@/src/lib/server/auth";
 import { startTrial } from "@/src/lib/server/trial";
+import { normalizePlan } from "@/src/lib/plans";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
 
 export async function POST(request: Request) {
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
     const name = String(body.name || "").trim();
     email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
+    const selectedPlan = normalizePlan(body.plan || "captain");
 
     if (!organization || !name || !email || password.length < 8) {
       return NextResponse.json({ error: "Complete all fields and use at least 8 password characters." }, { status: 400 });
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await createOrganizationAndAdmin({ organization, name, email, passwordHash });
-    const entitlement = await startTrial(result.orgId);
+    const entitlement = await startTrial(result.orgId, selectedPlan);
 
     await setSession({ userId: result.userId, orgId: result.orgId, role: "admin", email });
     await setAccessCookie(entitlement);
@@ -37,6 +39,8 @@ export async function POST(request: Request) {
       redirect: "/dashboard",
       trial: {
         days: 14,
+        plan: entitlement.plan,
+        planName: entitlement.planName,
         startsAt: new Date().toISOString(),
         endsAt: entitlement.expiresAt
       }
