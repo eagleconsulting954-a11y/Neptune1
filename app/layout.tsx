@@ -5,10 +5,11 @@ import "./dashboard-admin-link.css";
 import "./real-data.css";
 import "./demo.css";
 import "./maritime-intelligence.css";
+import "./trial-access.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Maritime Intelligence",
-  description: "A premium vessel command, maritime weather, ocean forecast, port intelligence, bunkering, MRCC, CRM, and analytics platform."
+  description: "A premium vessel command, maritime weather, ocean forecast, port intelligence, bunkering, MRCC, CRM, analytics, and enforced 14-day trial platform."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
