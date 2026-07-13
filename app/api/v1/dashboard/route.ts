@@ -5,7 +5,8 @@ import { dashboard } from "@/src/lib/server/db";
 export async function GET() {
   try {
     const session = await requireSession();
-    return NextResponse.json(await dashboard(session.orgId));
+    const data = await dashboard(session.orgId);
+    return NextResponse.json({ ...data, entitlement: session.entitlement });
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
