@@ -19,6 +19,7 @@ Neptune1 is a full-stack Next.js maritime CRM and vessel operations platform for
 - Premium responsive landing page, pricing, resources, signup, login, checkout, vessel dashboard, public demo, tenant CRM admin, and platform owner administration.
 - Multi-tenant organization and user model with signed HTTP-only sessions.
 - PostgreSQL persistence and Stripe subscription billing.
+- Secure forgot-password flow with hashed one-time tokens, 30-minute expiry, request throttling, one-use enforcement, and Resend email delivery.
 - CRUD APIs for vessels, delegation duties, work orders, certificates, incidents, CRM accounts, activity events, subscriptions, ports, bunkering plans, MRCC contacts, and port-congestion snapshots.
 - Hot-work and inspection delegation workflows.
 - CRM pipeline, weighted pipeline, stage distribution, CSV export, operational analytics, and audit activity.
@@ -31,6 +32,22 @@ Neptune1 is a full-stack Next.js maritime CRM and vessel operations platform for
   - Bunkering voyage calculation, reserve, recommended lift, estimated cost, and saved plans.
   - Verified MRCC/JRCC contact directory and nearest-contact calculation.
   - Premium lighthouse, compass, route, buoy, radar, and horizon visuals designed to engage younger maritime professionals.
+
+## Password recovery
+
+```text
+/forgot-password
+/reset-password?token=<one-time-token>
+```
+
+The password-reset request endpoint returns the same success message whether or not an account exists, limiting account enumeration. Tokens are stored as SHA-256 hashes, expire after 30 minutes, and become unusable immediately after a successful password update.
+
+Required email variables:
+
+```text
+RESEND_API_KEY=re_...
+PASSWORD_RESET_FROM_EMAIL=Neptune <account@your-verified-domain.com>
+```
 
 ## Platform owner portal
 
@@ -88,6 +105,8 @@ AUTH_SECRET=long-random-secret
 DATABASE_URL=postgres://user:password@host:5432/neptune
 PLATFORM_ADMIN_EMAILS=comma-separated-owner-emails
 ALLOW_DEMO_LOGIN=false
+RESEND_API_KEY=re_...
+PASSWORD_RESET_FROM_EMAIL=Neptune <account@your-verified-domain.com>
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_CAPTAIN=price_...
