@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { createResource, deleteResource, listResource, updateResource, type ResourceName } from "@/src/lib/server/db";
+import { canAccessResource, planDefinition } from "@/src/lib/plans";
 
 const allowed = new Set<ResourceName>([
   "vessels",
@@ -23,11 +24,17 @@ async function resourceFrom(context: { params: Promise<{ resource: string }> }) 
   return resource as ResourceName;
 }
 
+function assertPlanAccess(plan: string, resource: ResourceName) {
+  if (!canAccessResource(plan, resource)) throw new Error("PLAN_UPGRADE_REQUIRED");
+}
+
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "UNKNOWN";
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
   if (message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "An active Neptune subscription is required.", code: "SUBSCRIPTION_REQUIRED" }, { status: 402 });
+  if (message === "PLAN_UPGRADE_REQUIRED") return NextResponse.json({ error: "This module is not included in your current package. Upgrade to Full Vessel Access to unlock the complete suite.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+  if (message === "VESSEL_LIMIT_REACHED") return NextResponse.json({ error: "The Captain package supports one vessel. Upgrade to FleetOps or Full Vessel Access to add more vessels.", code: "VESSEL_LIMIT_REACHED" }, { status: 403 });
   if (message === "NOT_FOUND") return NextResponse.json({ error: "Unknown resource" }, { status: 404 });
   if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "Persistent database is not configured. Add DATABASE_URL before creating real records." }, { status: 503 });
   console.error(error);
@@ -38,6 +45,7 @@ export async function GET(_: Request, context: { params: Promise<{ resource: str
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertPlanAccess(session.entitlement.plan, resource);
     return NextResponse.json({ items: await listResource(resource, session.orgId) });
   } catch (error) {
     return errorResponse(error);
@@ -48,6 +56,17 @@ export async function POST(request: Request, context: { params: Promise<{ resour
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertPlanAccess(session.entitlement.plan, resource);
+
+    if (resource === "vessels") {
+      const definition = planDefinition(session.entitlement.plan);
+      const maxVessels = definition.limits.vessels;
+      if (maxVessels !== null) {
+        const existing = await listResource("vessels", session.orgId);
+        if (existing.length >= maxVessels) throw new Error("VESSEL_LIMIT_REACHED");
+      }
+    }
+
     const body = await request.json();
     return NextResponse.json({ item: await createResource(resource, session.orgId, body) }, { status: 201 });
   } catch (error) {
@@ -59,6 +78,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ resou
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertPlanAccess(session.entitlement.plan, resource);
     const body = await request.json();
     if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
     const item = await updateResource(resource, session.orgId, body.id, body);
@@ -72,6 +92,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ reso
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertPlanAccess(session.entitlement.plan, resource);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
