@@ -26,6 +26,8 @@ async function resourceFrom(context: { params: Promise<{ resource: string }> }) 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "UNKNOWN";
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
+  if (message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "An active Neptune subscription is required.", code: "SUBSCRIPTION_REQUIRED" }, { status: 402 });
   if (message === "NOT_FOUND") return NextResponse.json({ error: "Unknown resource" }, { status: 404 });
   if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "Persistent database is not configured. Add DATABASE_URL before creating real records." }, { status: 503 });
   console.error(error);
