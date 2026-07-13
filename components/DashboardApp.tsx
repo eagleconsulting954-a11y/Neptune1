@@ -93,6 +93,10 @@ export function DashboardApp() {
       window.location.href = "/login";
       return;
     }
+    if (res.status === 402) {
+      window.location.href = "/trial-expired";
+      return;
+    }
     const result = await res.json();
     if (!res.ok) {
       setMessage(result.error || "Unable to load Neptune data.");
@@ -137,12 +141,17 @@ export function DashboardApp() {
       body: JSON.stringify(body)
     });
     const result = await res.json();
+    if (res.status === 402) {
+      window.location.href = "/trial-expired";
+      return;
+    }
     if (!res.ok) {
       setMessage(result.error || "Unable to save");
       return;
     }
+    const wasUpdate = Boolean(modal.item?.id);
     setModal(null);
-    setMessage(modal.item ? "Record updated." : "Record created.");
+    setMessage(wasUpdate ? "Record updated." : "Record created from your organization data.");
     await load();
   }
 
@@ -150,6 +159,10 @@ export function DashboardApp() {
     if (!window.confirm("Delete this record?")) return;
     const res = await fetch(`/api/v1/${resource}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await res.json().catch(() => ({}));
+    if (res.status === 402) {
+      window.location.href = "/trial-expired";
+      return;
+    }
     if (!res.ok) {
       setMessage(result.error || "Unable to delete record.");
       return;
@@ -193,24 +206,24 @@ export function DashboardApp() {
     <div className={`dashboard-shell ${menuOpen ? "menu-open" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-head"><div className="brand"><span className="brand-mark">✦</span><span>NEPTUNE<small>Vessel Command</small></span></div><button className="menu-btn" onClick={() => setMenuOpen(false)}>×</button></div>
-        <div className="sidebar-current"><b>{tab}</b><span>{isMaritimeIntel ? "Weather, ocean, ports, bunkering, and rescue intelligence" : "Active production workspace"}</span></div>
+        <div className="sidebar-current"><b>{tab}</b><span>{isMaritimeIntel ? "Weather, ocean, ports, bunkering, and rescue intelligence" : "Your organization workspace"}</span></div>
         {Object.entries(NAV_GROUPS).map(([group, items]) => <details className="nav-group" open key={group}><summary>{group}<span>{items.length}</span></summary><div className="nav-grid">{items.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => chooseTab(item)}>{item}</button>)}</div></details>)}
         <button className="btn danger" style={{ width: "100%", marginTop: 16 }} onClick={logout}>Logout</button>
       </aside>
       <button className="mobile-scrim" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
       <main className="main">
-        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : "Search current module..."} disabled={isMaritimeIntel} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
+        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : "Search your organization records..."} disabled={isMaritimeIntel} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
         <section className={`workspace glass premium ${isMaritimeIntel ? "maritime-workspace" : ""}`}>
-          {!isMaritimeIntel && <div className="workspace-header"><div><p className="eyebrow">Production Workspace</p><h1>{tab}</h1><p className="muted">Live organization data, persistent records, role-aware access, and connected billing.</p></div><div className="actions"><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button>{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
+          {!isMaritimeIntel && <div className="workspace-header"><div><p className="eyebrow">Private Organization Workspace</p><h1>{tab}</h1><p className="muted">Every total, table, alert, and analytic is calculated only from information entered by your organization.</p></div><div className="actions"><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button>{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
           {message && <div className="form-message" style={{ marginTop: 12 }}>{message}</div>}
-          {loading || !data ? <p className="lede">Loading Neptune data...</p> : <>
+          {loading || !data ? <p className="lede">Loading your organization data...</p> : <>
             {!isMaritimeIntel && <div className="kpi-grid">
               <div className="kpi"><span>Vessels</span><b>{kpis.vessels || 0}</b></div>
               <div className="kpi"><span>Open duties</span><b>{kpis.openDuties || 0}</b></div>
               <div className="kpi"><span>Critical</span><b>{kpis.critical || 0}</b></div>
               <div className="kpi"><span>Readiness</span><b>{kpis.readiness || 0}%</b></div>
             </div>}
-            {tab === "Command" && <Command data={data} openTab={chooseTab} />}
+            {tab === "Command" && <Command data={data} openTab={chooseTab} createVessel={() => setModal({ resource: "vessels", title: "Add your first vessel" })} createDuty={() => quickDuty("Inspection")} />}
             {tab === "Maritime Intel" && <MaritimeIntelligence data={data} refresh={load} notify={setMessage} />}
             {tab === "Settings" && <Settings logout={logout} />}
             {resource && <ResourceView resource={resource} rows={visible} edit={item => setModal({ resource, item, title: `Edit ${tab} record` })} remove={id => remove(resource, id)} />}
@@ -222,7 +235,24 @@ export function DashboardApp() {
   );
 }
 
-function Command({ data, openTab }: { data: any; openTab: (tab: string) => void }) {
+function Command({ data, openTab, createVessel, createDuty }: { data: any; openTab: (tab: string) => void; createVessel: () => void; createDuty: () => void }) {
+  const workspaceEmpty = [
+    data.vessels,
+    data.duties,
+    data.workOrders,
+    data.certificates,
+    data.incidents,
+    data.crm,
+    data.events,
+    data.ports,
+    data.bunkerPlans,
+    data.mrccContacts
+  ].every(records => !records?.length);
+
+  if (workspaceEmpty) {
+    return <section className="first-run-workspace glass"><div><p className="eyebrow">Clean Trial Workspace</p><h2>Start with your own vessel and operational data.</h2><p>Neptune has not inserted sample vessels, fake CRM contacts, synthetic duties, or demo analytics. As your team enters records, the command dashboard, readiness totals, alerts, maritime intelligence, CRM, and analytics will calculate from that information.</p></div><div className="first-run-steps"><button onClick={createVessel}><span>1</span><div><b>Add your first vessel</b><small>Create the vessel record that powers fleet readiness and operations.</small></div></button><button onClick={createDuty}><span>2</span><div><b>Assign the first duty</b><small>Delegate a real inspection or hot-work responsibility.</small></div></button><button onClick={() => openTab("Maritime Intel")}><span>3</span><div><b>Add ports and intelligence</b><small>Store port coordinates, weather locations, bunkering plans, and verified MRCC contacts.</small></div></button><button onClick={() => openTab("CRM")}><span>4</span><div><b>Build your CRM</b><small>Add real customer accounts and opportunities for commercial analytics.</small></div></button></div></section>;
+  }
+
   const cards = [
     ["Maritime Intel", `${data.ports?.length || 0} ports`, "Live weather, ocean forecasts, port congestion, bunker plans, and MRCC contacts"],
     ["Delegation", `${data.duties?.length || 0} duties`, "Hot work and inspection ownership"],
@@ -240,12 +270,12 @@ function Settings({ logout }: { logout: () => void }) {
 }
 
 function ResourceView({ resource, rows, edit, remove }: { resource: string; rows: any[]; edit: (item: any) => void; remove: (id: string) => void }) {
-  if (!rows.length) return <div className="record"><h3>No records yet</h3><p>Create the first record for this module.</p></div>;
+  if (!rows.length) return <div className="record empty-organization-record"><p className="eyebrow">No organization data</p><h3>No records yet</h3><p>This module is intentionally empty until your team creates its first real record.</p></div>;
   const columns = Object.keys(rows[0]).filter(key => !["org_id", "created_at", "password_hash"].includes(key)).slice(0, 7);
   return <div className="data-grid"><table><thead><tr>{columns.map(column => <th key={column}>{column.replaceAll("_", " ")}</th>)}<th>Actions</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}>{columns.map(column => <td key={column}>{column === "annual_value" ? `$${Number(row[column] || 0).toLocaleString()}` : String(row[column] ?? "—")}</td>)}<td><div className="actions"><button className="btn" onClick={() => edit(row)}>Edit</button>{resource !== "subscriptions" && <button className="btn danger" onClick={() => remove(row.id)}>Delete</button>}</div></td></tr>)}</tbody></table></div>;
 }
 
 function RecordModal({ modal, close, save }: { modal: { resource: string; item?: any; title: string }; close: () => void; save: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const fields = FORM_FIELDS[modal.resource] || [];
-  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Neptune Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} required={!['imo', 'eta', 'issuer', 'expires_at', 'email'].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
+  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Your Organization Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} required={!["imo", "eta", "issuer", "expires_at", "email"].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
 }
