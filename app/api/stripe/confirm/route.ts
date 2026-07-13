@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { upsertSubscription } from "@/src/lib/server/db";
+import { setAccessCookie } from "@/src/lib/server/auth";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -14,6 +15,8 @@ export async function GET(request: Request) {
 
   const subscription = typeof checkout.subscription === "string" ? await stripe.subscriptions.retrieve(checkout.subscription) : checkout.subscription;
   const orgId = checkout.metadata?.orgId;
+  const currentPeriodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : new Date(Date.now() + 30 * 86_400_000).toISOString();
+
   if (orgId) {
     await upsertSubscription({
       orgId,
@@ -21,11 +24,17 @@ export async function GET(request: Request) {
       subscriptionId: subscription?.id || null,
       plan: checkout.metadata?.plan || "fleetops",
       status: subscription?.status || "active",
-      currentPeriodEnd: subscription?.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null
+      currentPeriodEnd
     });
   }
 
-  const response = NextResponse.redirect(`${appUrl}/dashboard`);
-  response.cookies.set("neptune_paid", "active", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 });
-  return response;
+  await setAccessCookie({
+    allowed: true,
+    status: "active",
+    plan: checkout.metadata?.plan || "fleetops",
+    expiresAt: currentPeriodEnd,
+    daysRemaining: Math.max(1, Math.ceil((new Date(currentPeriodEnd).getTime() - Date.now()) / 86_400_000))
+  });
+
+  return NextResponse.redirect(`${appUrl}/dashboard`);
 }
