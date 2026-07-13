@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getEntitlement, type Entitlement } from "@/src/lib/server/trial";
 
 export type Session = { userId: string; orgId: string; role: string; email?: string; exp: number };
+export type ProtectedSession = Session & { entitlement: Entitlement };
 const SESSION_COOKIE = "neptune_session_v2";
 const ACCESS_COOKIE = "neptune_access_v1";
 
@@ -80,7 +81,9 @@ export async function clearSession() {
   jar.set("neptune_paid", "", { path: "/", maxAge: 0 });
 }
 
-export async function requireSession(options: { allowExpired?: boolean } = {}) {
+export function requireSession(): Promise<ProtectedSession>;
+export function requireSession(options: { allowExpired: true }): Promise<Session>;
+export async function requireSession(options: { allowExpired?: boolean } = {}): Promise<Session | ProtectedSession> {
   const session = await getSession();
   if (!session) throw new Error("UNAUTHORIZED");
   if (options.allowExpired) return session;
