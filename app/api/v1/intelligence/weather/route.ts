@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json(await getWeatherAndOcean(latitude, longitude));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown weather provider error";
+    if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     console.error(error);
     return NextResponse.json({ error: "Unable to retrieve live weather and marine forecast data.", detail: message }, { status: 502 });
   }
