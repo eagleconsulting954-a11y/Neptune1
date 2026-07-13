@@ -16,8 +16,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ port, congestion });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown congestion provider error";
-    console.error(error);
+    if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "DATABASE_URL is required for port intelligence." }, { status: 503 });
+    console.error(error);
     return NextResponse.json({ error: "Unable to retrieve port congestion data.", detail: message }, { status: 502 });
   }
 }
