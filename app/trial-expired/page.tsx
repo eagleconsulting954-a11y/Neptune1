@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { CheckoutButton } from "@/components/CheckoutButton";
+import { getSession } from "@/src/lib/server/auth";
+import { getEntitlement } from "@/src/lib/server/trial";
+import { PLAN_CATALOG } from "@/src/lib/plans";
 
-export default function TrialExpiredPage() {
+export default async function TrialExpiredPage() {
+  const session = await getSession();
+  const entitlement = session ? await getEntitlement(session.orgId).catch(() => null) : null;
+  const plan = PLAN_CATALOG[entitlement?.plan || "captain"];
+
   return (
     <main className="trial-expired-page">
       <section className="trial-expired-card glass premium">
@@ -11,10 +18,12 @@ export default function TrialExpiredPage() {
         <p className="lede">The trial automatically ends exactly 14 days after registration. Your organization and operational records remain stored, but dashboard and API access stay locked until an active subscription is confirmed.</p>
         <div className="trial-expired-grid">
           <article><span>Workspace status</span><b>Paused</b><p>No records are deleted when the trial ends.</p></article>
-          <article><span>Access control</span><b>Automatic</b><p>Dashboard, admin, CRM, and operational APIs are blocked.</p></article>
+          <article><span>Trial package</span><b>{plan.shortName}</b><p>Only the modules assigned to this package will reactivate.</p></article>
           <article><span>Restore access</span><b>Immediate</b><p>Verified Stripe payment reactivates the workspace.</p></article>
         </div>
-        <CheckoutButton plan="fleetops" label="Activate Neptune FleetOps" />
+        {plan.price === null
+          ? <Link className="btn gold" href="/pricing">Contact Neptune for Enterprise access</Link>
+          : <CheckoutButton plan={plan.key} label={`Activate ${plan.shortName} · ${plan.priceLabel}/month`} />}
         <div className="actions trial-secondary-actions">
           <Link className="btn" href="/pricing">Compare plans</Link>
           <Link className="btn" href="/demo">Use the public demo</Link>
