@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { dashboard } from "@/src/lib/server/db";
+import { canAccessModule } from "@/src/lib/plans";
 
 function monthKey(value: string | Date) {
   const date = new Date(value);
@@ -21,6 +22,9 @@ export async function GET() {
   try {
     const session = await requireSession();
     if (session.role !== "admin") return NextResponse.json({ error: "Administrator access required" }, { status: 403 });
+    if (!canAccessModule(session.entitlement.plan, "analytics")) {
+      return NextResponse.json({ error: "Fleet analytics is included in FleetOps, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+    }
 
     const data = await dashboard(session.orgId);
     const crm = data.crm || [];
@@ -51,7 +55,7 @@ export async function GET() {
 
     return NextResponse.json({
       storageMode: data.storageMode,
-      organization: { id: session.orgId, role: session.role, email: session.email },
+      organization: { id: session.orgId, role: session.role, email: session.email, plan: session.entitlement.planName },
       summary: {
         accounts: crm.length,
         pipeline,
@@ -78,6 +82,7 @@ export async function GET() {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
     if (message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "An active Neptune subscription is required.", code: "SUBSCRIPTION_REQUIRED" }, { status: 402 });
+    console.error(error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
