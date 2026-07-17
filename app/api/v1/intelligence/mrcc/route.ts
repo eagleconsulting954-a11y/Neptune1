@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { createResource, listResource } from "@/src/lib/server/db";
 import { nearestMrcc } from "@/src/lib/server/maritime";
+import { canAccessModule } from "@/src/lib/plans";
+
+function packageError() {
+  return NextResponse.json({ error: "MRCC intelligence is included in Captain, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+}
 
 export async function GET(request: Request) {
   try {
     const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) return packageError();
     const url = new URL(request.url);
     const latitude = Number(url.searchParams.get("lat"));
     const longitude = Number(url.searchParams.get("lon"));
@@ -23,6 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) return packageError();
     if (session.role !== "admin") return NextResponse.json({ error: "Administrator access required." }, { status: 403 });
     const body = await request.json();
     const contacts = Array.isArray(body.contacts) ? body.contacts : [body];
