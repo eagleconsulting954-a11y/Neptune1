@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { dashboard } from "@/src/lib/server/db";
 import { canAccessModule } from "@/src/lib/plans";
+import { filterDashboardForPlan } from "@/src/lib/server/plan-dashboard";
 
 function monthKey(value: string | Date) {
   const date = new Date(value);
@@ -26,7 +27,8 @@ export async function GET() {
       return NextResponse.json({ error: "Fleet analytics is included in FleetOps, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
     }
 
-    const data = await dashboard(session.orgId);
+    const raw = await dashboard(session.orgId);
+    const data = filterDashboardForPlan(raw, session.entitlement.plan);
     const crm = data.crm || [];
     const events = data.events || [];
     const stages = crm.reduce((acc: Record<string, { count: number; value: number }>, account: any) => {
@@ -53,9 +55,18 @@ export async function GET() {
       activity: events.filter((event: any) => event.created_at && monthKey(event.created_at) === month.key).length
     }));
 
+    const operational = [
+      { module: "vessels", label: "Fleet readiness", value: data.kpis.readiness, suffix: "%" },
+      { module: "delegation", label: "Open duties", value: data.kpis.openDuties, suffix: "" },
+      { module: "maintenance", label: "Work orders", value: data.kpis.openWorkOrders, suffix: "" },
+      { module: "certificates", label: "Expiring certificates", value: data.kpis.expiringCertificates, suffix: "" },
+      { module: "incidents", label: "Open incidents", value: data.kpis.openIncidents, suffix: "" }
+    ].filter(item => canAccessModule(session.entitlement.plan, item.module as any));
+
     return NextResponse.json({
       storageMode: data.storageMode,
       organization: { id: session.orgId, role: session.role, email: session.email, plan: session.entitlement.planName },
+      package: data.package,
       summary: {
         accounts: crm.length,
         pipeline,
@@ -63,18 +74,12 @@ export async function GET() {
         averageDeal: crm.length ? Math.round(pipeline / crm.length) : 0,
         wonValue: won.reduce((sum: number, account: any) => sum + Number(account.annual_value || 0), 0),
         fleetReadiness: data.kpis.readiness,
-        openDuties: data.kpis.openDuties,
+        openDuties: canAccessModule(session.entitlement.plan, "delegation") ? data.kpis.openDuties : null,
         criticalItems: data.kpis.critical
       },
       stages: Object.entries(stages).map(([name, value]) => ({ name, ...value })),
       crm,
-      operational: [
-        { label: "Fleet readiness", value: data.kpis.readiness, suffix: "%" },
-        { label: "Open duties", value: data.kpis.openDuties, suffix: "" },
-        { label: "Work orders", value: data.kpis.openWorkOrders, suffix: "" },
-        { label: "Expiring certificates", value: data.kpis.expiringCertificates, suffix: "" },
-        { label: "Open incidents", value: data.kpis.openIncidents, suffix: "" }
-      ],
+      operational,
       trend,
       recentActivity: events.slice(0, 8)
     });
