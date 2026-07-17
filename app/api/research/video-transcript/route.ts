@@ -5,7 +5,7 @@ export async function GET() {
     const response = await fetch("https://youtube-transcript-api-tau-one.vercel.app/transcript", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ video_url: "https://www.youtube.com/watch?v=s_wGr2TYeHU" }),
+      body: JSON.stringify({ url: "https://www.youtube.com/watch?v=s_wGr2TYeHU" }),
       cache: "no-store",
       signal: AbortSignal.timeout(30000)
     });
