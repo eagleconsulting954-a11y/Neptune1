@@ -11,10 +11,11 @@ import "./platform-admin.css";
 import "./password-reset.css";
 import "./decision-dashboard.css";
 import "./package-pricing.css";
+import "./psychology-landing.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Maritime Intelligence",
-  description: "A premium vessel command, fleet trends, critical alerts, decision recommendations, package-specific access, maritime intelligence, CRM, analytics, enforced 14-day trial, platform monitoring, and secure account recovery system."
+  description: "Neptune helps captains and fleet operators protect the vessel, crew, and schedule with accountable workflows, decision alerts, package-specific access, and maritime intelligence."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
