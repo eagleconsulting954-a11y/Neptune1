@@ -1,47 +1,62 @@
 import { NextResponse } from "next/server";
 
 const VIDEO_ID = "s_wGr2TYeHU";
+const YOUTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+
+type CaptionTrack = {
+  baseUrl: string;
+  languageCode?: string;
+  kind?: string;
+  name?: { simpleText?: string; runs?: { text?: string }[] };
+};
 
 export async function GET() {
   try {
-    const videoUrl = `https://www.youtube.com/watch?v=${VIDEO_ID}`;
-    const [metadataResponse, listResponse] = await Promise.all([
-      fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`, {
-        cache: "no-store",
-        signal: AbortSignal.timeout(30000)
+    const playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${YOUTUBE_KEY}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        videoId: VIDEO_ID,
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: "2.20260715.00.00",
+            hl: "en",
+            gl: "US"
+          }
+        }
       }),
-      fetch(`https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&type=list`, {
-        cache: "no-store",
-        signal: AbortSignal.timeout(30000)
-      })
-    ]);
-    const metadataText = await metadataResponse.text();
-    const metadata = metadataResponse.ok ? JSON.parse(metadataText) : { error: metadataText, status: metadataResponse.status };
-    const trackList = await listResponse.text();
-    const tracks = Array.from(trackList.matchAll(/<track\s+([^>]+)\/>/g)).map(match => {
-      const attributes = Object.fromEntries(Array.from(match[1].matchAll(/(\w+)="([^"]*)"/g)).map(attribute => [attribute[1], attribute[2].replaceAll("&amp;", "&")]));
-      return attributes;
-    });
-    const selected = tracks.find(track => String(track.lang_code || "").startsWith("en") && !track.kind)
-      || tracks.find(track => String(track.lang_code || "").startsWith("en"))
-      || tracks[0];
-
-    if (!selected) return NextResponse.json({ metadata, error: "No YouTube caption track was available.", availableTracks: tracks });
-
-    const params = new URLSearchParams({
-      v: VIDEO_ID,
-      lang: String(selected.lang_code || "en"),
-      fmt: "json3"
-    });
-    if (selected.name) params.set("name", String(selected.name));
-    if (selected.kind) params.set("kind", String(selected.kind));
-
-    const captionsResponse = await fetch(`https://www.youtube.com/api/timedtext?${params.toString()}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(30000)
     });
-    const captionText = await captionsResponse.text();
-    const captions = JSON.parse(captionText) as { events?: { tStartMs?: number; dDurationMs?: number; segs?: { utf8?: string }[] }[] };
+    const player = await playerResponse.json() as any;
+    const videoDetails = player.videoDetails || {};
+    const tracks: CaptionTrack[] = player.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    const selected = tracks.find(track => track.languageCode?.startsWith("en") && track.kind !== "asr")
+      || tracks.find(track => track.languageCode?.startsWith("en"))
+      || tracks[0];
+
+    if (!selected?.baseUrl) {
+      return NextResponse.json({
+        status: "metadata-only",
+        title: videoDetails.title || null,
+        description: videoDetails.shortDescription || null,
+        author: videoDetails.author || null,
+        lengthSeconds: videoDetails.lengthSeconds || null,
+        viewCount: videoDetails.viewCount || null,
+        keywords: videoDetails.keywords || [],
+        playability: player.playabilityStatus || null,
+        error: "No caption track was available."
+      });
+    }
+
+    const captionUrl = new URL(selected.baseUrl);
+    captionUrl.searchParams.set("fmt", "json3");
+    const captionsResponse = await fetch(captionUrl, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(30000)
+    });
+    const captions = await captionsResponse.json() as { events?: { tStartMs?: number; dDurationMs?: number; segs?: { utf8?: string }[] }[] };
     const segments = (captions.events || [])
       .filter(event => event.segs?.length)
       .map(event => ({
@@ -52,14 +67,17 @@ export async function GET() {
       .filter(segment => segment.text);
 
     return NextResponse.json({
-      metadata,
       status: "success",
-      selected,
-      availableTracks: tracks,
+      title: videoDetails.title || null,
+      description: videoDetails.shortDescription || null,
+      author: videoDetails.author || null,
+      lengthSeconds: videoDetails.lengthSeconds || null,
+      keywords: videoDetails.keywords || [],
+      availableTracks: tracks.map(track => ({ languageCode: track.languageCode, kind: track.kind || "manual", name: track.name })),
       transcript: segments.map(segment => segment.text).join(" ").replace(/\s+/g, " ").trim(),
       segments
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to retrieve transcript" }, { status: 502 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to retrieve video data" }, { status: 502 });
   }
 }
