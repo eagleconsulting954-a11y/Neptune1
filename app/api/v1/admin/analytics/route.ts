@@ -31,13 +31,13 @@ export async function GET() {
     const data = filterDashboardForPlan(raw, session.entitlement.plan);
     const crm = data.crm || [];
     const events = data.events || [];
-    const stages = crm.reduce((acc: Record<string, { count: number; value: number }>, account: any) => {
+    const stages: Record<string, { count: number; value: number }> = crm.reduce((acc: Record<string, { count: number; value: number }>, account: any) => {
       const stage = account.stage || "Unassigned";
       acc[stage] ||= { count: 0, value: 0 };
       acc[stage].count += 1;
       acc[stage].value += Number(account.annual_value || 0);
       return acc;
-    }, {});
+    }, {} as Record<string, { count: number; value: number }>);
 
     const pipeline = crm.reduce((sum: number, account: any) => sum + Number(account.annual_value || 0), 0);
     const won = crm.filter((account: any) => String(account.stage).toLowerCase().includes("won"));
@@ -77,7 +77,7 @@ export async function GET() {
         openDuties: canAccessModule(session.entitlement.plan, "delegation") ? data.kpis.openDuties : null,
         criticalItems: data.kpis.critical
       },
-      stages: Object.entries(stages).map(([name, value]) => ({ name, ...value })),
+      stages: Object.entries(stages).map(([name, value]) => ({ name, count: value.count, value: value.value })),
       crm,
       operational,
       trend,
