@@ -126,7 +126,8 @@ function buildAlerts(data: DashboardInput): InsightAlert[] {
   if (lowReadiness.length) alerts.push({ id: "low-readiness", severity: "warning", title: "Vessels below readiness target", detail: `${lowReadiness.length} vessel${lowReadiness.length === 1 ? " is" : "s are"} below the 75% readiness threshold.`, module: "Vessels", count: lowReadiness.length });
   if (congestedPorts.length) alerts.push({ id: "port-congestion", severity: "watch", title: "High port congestion signal", detail: `${congestedPorts.length} monitored port${congestedPorts.length === 1 ? " has" : "s have"} a high or critical latest congestion reading.`, module: "Maritime Intel", count: congestedPorts.length });
 
-  return alerts.sort((a, b) => ({ critical: 0, warning: 1, watch: 2 }[a.severity] - ({ critical: 0, warning: 1, watch: 2 }[b.severity]));
+  const severityOrder: Record<InsightAlert["severity"], number> = { critical: 0, warning: 1, watch: 2 };
+  return alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 }
 
 function buildRecommendations(data: DashboardInput, alerts: InsightAlert[]): Recommendation[] {
@@ -134,8 +135,8 @@ function buildRecommendations(data: DashboardInput, alerts: InsightAlert[]): Rec
   const readiness = Number(data.kpis.readiness || 0);
   const vesselsWithReadiness = data.vessels.filter(item => Number(item.readiness || 0) > 0).length;
   const vesselsMissingCoreData = data.vessels.filter(item => !item.imo || !item.status || Number(item.readiness || 0) <= 0).length;
-
   const alert = (id: string) => alerts.find(item => item.id === id);
+
   if (alert("expired-certificates")) recommendations.push({ id: "renew-expired", priority: "Immediate", title: "Resolve expired certificate records before the next operational commitment", rationale: "Expired records create a direct compliance and voyage-readiness risk.", action: "Verify validity, upload renewed evidence, and update status.", module: "Certificates", signal: `${alert("expired-certificates")?.count} expired` });
   if (alert("critical-duties")) recommendations.push({ id: "close-critical-duties", priority: "Immediate", title: "Run a command review of every critical delegated duty", rationale: "Open critical assignments indicate unresolved operational control points.", action: "Confirm owner, due time, evidence, and master approval.", module: "Delegation", signal: `${alert("critical-duties")?.count} critical` });
   if (alert("severe-incidents")) recommendations.push({ id: "incident-risks", priority: "Immediate", title: "Escalate severe incident corrective actions", rationale: "Unclosed high-severity incidents can repeat when root causes and controls remain incomplete.", action: "Review RCA owner, corrective actions, and verification dates.", module: "Incidents", signal: `${alert("severe-incidents")?.count} severe` });
@@ -158,6 +159,11 @@ function operationalScore(data: DashboardInput, alerts: InsightAlert[]) {
   return Math.max(0, Math.min(100, Math.round(readiness * .65 + dataCoverage * .35 - criticalCount * 7 - warningCount * 2)));
 }
 
+function snapshotDate(value: unknown) {
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10);
+}
+
 export async function buildDecisionInsights(orgId: string, data: DashboardInput) {
   await persistSnapshot(orgId, data.kpis);
   const trendRows = await sql<Row>(`
@@ -173,8 +179,8 @@ export async function buildDecisionInsights(orgId: string, data: DashboardInput)
   const criticalCount = alerts.filter(item => item.severity === "critical").reduce((total, item) => total + item.count, 0);
   const warningCount = alerts.filter(item => item.severity === "warning").reduce((total, item) => total + item.count, 0);
   const outlook = !data.vessels.length ? "Awaiting data" : criticalCount ? "At risk" : warningCount ? "Watch" : score >= 85 ? "Strong" : "Stable";
-  const latest = trendRows.at(-1);
-  const previous = trendRows.length > 1 ? trendRows.at(-2) : null;
+  const latest = trendRows.length ? trendRows[trendRows.length - 1] : null;
+  const previous = trendRows.length > 1 ? trendRows[trendRows.length - 2] : null;
 
   return {
     score,
@@ -190,7 +196,7 @@ export async function buildDecisionInsights(orgId: string, data: DashboardInput)
     recommendations,
     trend: {
       points: trendRows.map(row => ({
-        date: String(row.snapshot_date).slice(0, 10),
+        date: snapshotDate(row.snapshot_date),
         readiness: Number(row.readiness || 0),
         riskLoad: Number(row.critical_items || 0) + Number(row.open_incidents || 0) + Number(row.expiring_certificates || 0),
         openWork: Number(row.open_duties || 0) + Number(row.open_work_orders || 0)
