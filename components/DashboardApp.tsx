@@ -100,6 +100,23 @@ function tabAllowed(data: DashboardData | null, tab: string) {
   return !required || modules.includes(required);
 }
 
+function includedKpis(data: DashboardData | null) {
+  if (!data) return [];
+  const modules: string[] = data.entitlement?.access?.modules || [];
+  const kpis = data.kpis || {};
+  const cards = [
+    { module: "vessels", label: "Vessels", value: kpis.vessels || 0 },
+    { module: "vessels", label: "Readiness", value: `${kpis.readiness || 0}%` },
+    { module: "maritime_intel", label: "Monitored ports", value: kpis.ports || 0 },
+    { module: "delegation", label: "Open duties", value: kpis.openDuties || 0 },
+    { module: "maintenance", label: "Work orders", value: kpis.openWorkOrders || 0 },
+    { module: "certificates", label: "Certificate alerts", value: kpis.expiringCertificates || 0 },
+    { module: "incidents", label: "Open incidents", value: kpis.openIncidents || 0 },
+    { module: "crm", label: "CRM pipeline", value: `$${Number(kpis.pipeline || 0).toLocaleString()}` }
+  ];
+  return cards.filter(card => modules.includes(card.module));
+}
+
 export function DashboardApp() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [tab, setTab] = useState("Command");
@@ -236,7 +253,7 @@ export function DashboardApp() {
     return rows.filter((row: any) => JSON.stringify(row).toLowerCase().includes(needle));
   }, [data, resource, query]);
 
-  const kpis = data?.kpis || {};
+  const packageKpis = useMemo(() => includedKpis(data), [data]);
   const isMaritimeIntel = tab === "Maritime Intel";
   const isCommand = tab === "Command";
   const canDelegate = tabAllowed(data, "Delegation");
@@ -257,15 +274,10 @@ export function DashboardApp() {
       <main className="main">
         <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : isCommand ? "Open a module to search organization records..." : "Search your organization records..."} disabled={isMaritimeIntel || isCommand} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
         <section className={`workspace glass premium ${isMaritimeIntel ? "maritime-workspace" : ""}`}>
-          {!isMaritimeIntel && !isCommand && <div className="workspace-header"><div><p className="eyebrow">Private Organization Workspace</p><h1>{tab}</h1><p className="muted">Every total, alert, and analytic is calculated only from information entered by your organization.</p></div><div className="actions">{canDelegate && <><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button></>}{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
+          {!isMaritimeIntel && !isCommand && <div className="workspace-header"><div><p className="eyebrow">Private Organization Workspace</p><h1>{tab}</h1><p className="muted">Every visible module and metric is limited to the access listed for your purchased package.</p></div><div className="actions">{canDelegate && <><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button></>}{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
           {message && <div className="form-message" style={{ marginTop: 12 }}>{message}</div>}
           {loading || !data ? <p className="lede">Loading your organization decision data...</p> : <>
-            {!isMaritimeIntel && !isCommand && <div className="kpi-grid">
-              <div className="kpi"><span>Vessels</span><b>{kpis.vessels || 0}</b></div>
-              <div className="kpi"><span>Open duties</span><b>{kpis.openDuties || 0}</b></div>
-              <div className="kpi"><span>Critical signals</span><b>{kpis.critical || 0}</b></div>
-              <div className="kpi"><span>Readiness</span><b>{kpis.readiness || 0}%</b></div>
-            </div>}
+            {!isMaritimeIntel && !isCommand && <div className="kpi-grid">{packageKpis.map(card => <div className="kpi" key={`${card.module}-${card.label}`}><span>{card.label}</span><b>{card.value}</b></div>)}</div>}
             {isCommand && <DecisionCommandCenter data={data} openTab={chooseTab} createVessel={() => setModal({ resource: "vessels", title: "Add your first vessel" })} createDuty={() => quickDuty("Inspection")} />}
             {isMaritimeIntel && <MaritimeIntelligence data={data} refresh={load} notify={setMessage} />}
             {tab === "Settings" && <Settings logout={logout} />}
@@ -290,5 +302,5 @@ function ResourceView({ resource, rows, edit, remove }: { resource: string; rows
 
 function RecordModal({ modal, close, save }: { modal: { resource: string; item?: any; title: string }; close: () => void; save: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const fields = FORM_FIELDS[modal.resource] || [];
-  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Your Organization Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} min={field.key === "readiness" ? 0 : undefined} max={field.key === "readiness" ? 100 : undefined} required={!['imo', 'eta', 'issuer', 'expires_at', 'email'].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
+  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Your Organization Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} min={field.key === "readiness" ? 0 : undefined} max={field.key === "readiness" ? 100 : undefined} required={!["imo", "eta", "issuer", "expires_at", "email"].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
 }
