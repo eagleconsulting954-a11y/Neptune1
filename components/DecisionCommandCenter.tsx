@@ -81,7 +81,7 @@ function EmptyDecisionWorkspace({ data, openTab, createVessel, createDuty }: Dec
       <div>
         <p className="eyebrow">Clean Decision Workspace</p>
         <h2>Build the first operational baseline from your own data.</h2>
-        <p>Neptune has not inserted sample vessels, fake contacts, synthetic duties, or invented alerts. Fleet trends, critical warnings, and recommendations begin when your team enters real records.</p>
+        <p>Neptune has not inserted sample vessels, fake contacts, synthetic duties, or invented alerts. Fleet trends, critical warnings, and recommendations begin when your team enters real records included in the selected package.</p>
         <div className="decision-package-badge"><span>{data.entitlement?.planName || "Neptune"}</span><b>14-day package trial</b></div>
       </div>
       <div className="first-run-steps">
@@ -104,8 +104,27 @@ export function DecisionCommandCenter(props: DecisionCommandCenterProps) {
   const points = insights.trend?.points || [];
   const score = Number(insights.score || 0);
   const criticalAlerts = alerts.filter((item: any) => item.severity === "critical").length;
-  const totalOpenWork = Number(data.kpis?.openDuties || 0) + Number(data.kpis?.openWorkOrders || 0);
   const outlookClass = String(insights.outlook || "stable").toLowerCase().replaceAll(" ", "-");
+  const canDelegate = moduleAllowed(data, "Delegation");
+  const canMaintain = moduleAllowed(data, "Maintenance");
+  const canUseCertificates = moduleAllowed(data, "Certificates");
+  const canUseIncidents = moduleAllowed(data, "Incidents");
+  const canUseIntel = moduleAllowed(data, "Maritime Intel");
+  const canUseCrm = moduleAllowed(data, "CRM");
+  const workParts = [
+    canDelegate ? `${data.kpis?.openDuties || 0} duties` : null,
+    canMaintain ? `${data.kpis?.openWorkOrders || 0} work orders` : null
+  ].filter(Boolean);
+  const totalOpenWork = (canDelegate ? Number(data.kpis?.openDuties || 0) : 0) + (canMaintain ? Number(data.kpis?.openWorkOrders || 0) : 0);
+  const kpiCards = [
+    { key: "readiness", label: "Fleet readiness", value: `${data.kpis?.readiness || 0}%`, note: insights.trend?.readinessChange === null || insights.trend?.readinessChange === undefined ? "Baseline captured" : `${insights.trend.readinessChange >= 0 ? "+" : ""}${insights.trend.readinessChange} pts since prior snapshot` },
+    { key: "critical", label: "Critical signals", value: criticalAlerts, note: criticalAlerts ? "Immediate command review" : "No critical alert categories", critical: criticalAlerts > 0 },
+    ...(workParts.length ? [{ key: "work", label: "Open operational work", value: totalOpenWork, note: workParts.join(" · ") }] : []),
+    ...(canUseCertificates ? [{ key: "certificates", label: "Compliance window", value: data.kpis?.expiringCertificates || 0, note: "Expired or inside 45 days" }] : []),
+    ...(canUseIncidents ? [{ key: "incidents", label: "Open incidents", value: data.kpis?.openIncidents || 0, note: "Recorded corrective-action workload" }] : []),
+    ...(canUseIntel ? [{ key: "ports", label: "Monitored ports", value: data.kpis?.ports || 0, note: `${data.kpis?.bunkerPlans || 0} bunker plans` }] : []),
+    ...(canUseCrm ? [{ key: "pipeline", label: "Commercial pipeline", value: `$${Number(data.kpis?.pipeline || 0).toLocaleString()}`, note: `${data.crm?.length || 0} CRM accounts` }] : [])
+  ];
 
   const modules = [
     ["Maritime Intel", `${data.ports?.length || 0} ports`, "Weather, ocean, congestion, bunkering, and rescue intelligence"],
@@ -132,33 +151,30 @@ export function DecisionCommandCenter(props: DecisionCommandCenterProps) {
       </section>
 
       <section className="decision-kpi-grid">
-        <article><span>Fleet readiness</span><b>{data.kpis?.readiness || 0}%</b><small>{insights.trend?.readinessChange === null || insights.trend?.readinessChange === undefined ? "Baseline captured" : `${insights.trend.readinessChange >= 0 ? "+" : ""}${insights.trend.readinessChange} pts since prior snapshot`}</small></article>
-        <article className={criticalAlerts ? "critical" : ""}><span>Critical signals</span><b>{criticalAlerts}</b><small>{criticalAlerts ? "Immediate command review" : "No critical alert categories"}</small></article>
-        <article><span>Open operational work</span><b>{totalOpenWork}</b><small>{data.kpis?.openDuties || 0} duties · {data.kpis?.openWorkOrders || 0} work orders</small></article>
-        <article><span>Compliance window</span><b>{data.kpis?.expiringCertificates || 0}</b><small>Expired or inside 45 days</small></article>
+        {kpiCards.map((card: any) => <article className={card.critical ? "critical" : ""} key={card.key}><span>{card.label}</span><b>{card.value}</b><small>{card.note}</small></article>)}
       </section>
 
       <section className="decision-main-grid">
         <article className="decision-panel decision-trend-panel glass">
-          <div className="decision-panel-head"><div><p className="eyebrow">Fleet Trends</p><h3>Readiness versus recorded risk load</h3></div><span className="status">30-day view</span></div>
+          <div className="decision-panel-head"><div><p className="eyebrow">Fleet Trends</p><h3>Readiness versus included operational risk</h3></div><span className="status">30-day view</span></div>
           {points.length ? <TrendChart points={points} /> : <div className="decision-empty"><b>No trend baseline yet</b><p>Neptune will create the first real snapshot when dashboard data is available.</p></div>}
           <p className="decision-baseline-note">{insights.trend?.baselineStatus}</p>
         </article>
 
         <article className="decision-panel glass">
           <div className="decision-panel-head"><div><p className="eyebrow">Critical Alerts</p><h3>What needs attention now</h3></div><span className={`decision-count ${alerts.length ? "active" : ""}`}>{alerts.length}</span></div>
-          {alerts.length ? <div className="decision-alert-list">{alerts.slice(0, 6).map((alert: any) => <button key={alert.id} className={`decision-alert ${alert.severity}`} onClick={() => openTab(alert.module)}><span className="decision-alert-icon">{alert.severity === "critical" ? "!" : alert.severity === "warning" ? "▲" : "●"}</span><div><b>{alert.title}</b><p>{alert.detail}</p><small>Open {alert.module}</small></div><strong>{alert.count}</strong></button>)}</div> : <div className="decision-empty positive"><b>No critical signals detected</b><p>The current organization records do not contain open critical alert conditions.</p></div>}
+          {alerts.length ? <div className="decision-alert-list">{alerts.slice(0, 6).map((alert: any) => <button key={alert.id} className={`decision-alert ${alert.severity}`} onClick={() => openTab(alert.module)}><span className="decision-alert-icon">{alert.severity === "critical" ? "!" : alert.severity === "warning" ? "▲" : "●"}</span><div><b>{alert.title}</b><p>{alert.detail}</p><small>Open {alert.module}</small></div><strong>{alert.count}</strong></button>)}</div> : <div className="decision-empty positive"><b>No critical signals detected</b><p>The included organization records do not contain open critical alert conditions.</p></div>}
         </article>
       </section>
 
       <section className="decision-main-grid recommendations-grid">
         <article className="decision-panel decision-recommendation-panel glass">
-          <div className="decision-panel-head"><div><p className="eyebrow">Predictive Recommendations</p><h3>Next-best actions from current risk signals</h3></div><span className="status">Rules-based</span></div>
-          {recommendations.length ? <div className="decision-recommendations">{recommendations.map((item: any, index: number) => <button key={item.id} onClick={() => openTab(item.module)}><span className={`recommendation-priority ${item.priority.toLowerCase()}`}>{item.priority}</span><div><small>Recommendation {String(index + 1).padStart(2, "0")}</small><b>{item.title}</b><p>{item.rationale}</p><em>{item.action}</em></div><strong>{item.signal}</strong></button>)}</div> : <div className="decision-empty positive"><b>No corrective recommendation is currently triggered</b><p>Keep records current so Neptune can identify changes in readiness, workload, compliance, and risk.</p></div>}
+          <div className="decision-panel-head"><div><p className="eyebrow">Predictive Recommendations</p><h3>Next-best actions from included risk signals</h3></div><span className="status">Rules-based</span></div>
+          {recommendations.length ? <div className="decision-recommendations">{recommendations.map((item: any, index: number) => <button key={item.id} onClick={() => openTab(item.module)}><span className={`recommendation-priority ${item.priority.toLowerCase()}`}>{item.priority}</span><div><small>Recommendation {String(index + 1).padStart(2, "0")}</small><b>{item.title}</b><p>{item.rationale}</p><em>{item.action}</em></div><strong>{item.signal}</strong></button>)}</div> : <div className="decision-empty positive"><b>No corrective recommendation is currently triggered</b><p>Keep included records current so Neptune can identify changes in readiness, workload, compliance, and risk.</p></div>}
         </article>
 
         <article className="decision-panel glass">
-          <div className="decision-panel-head"><div><p className="eyebrow">Decision Modules</p><h3>Signals feeding the outlook</h3></div></div>
+          <div className="decision-panel-head"><div><p className="eyebrow">Decision Modules</p><h3>Only purchased modules feed this outlook</h3></div></div>
           <div className="decision-module-list">{modules.map(([title, value, note]) => <button key={title} onClick={() => openTab(title)}><div><span>{title}</span><b>{value}</b></div><p>{note}</p><small>Open module →</small></button>)}</div>
         </article>
       </section>
