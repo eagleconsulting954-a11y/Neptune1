@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { listResource } from "@/src/lib/server/db";
 import { fetchPortCongestion, saveCongestionSnapshot } from "@/src/lib/server/maritime";
+import { canAccessModule } from "@/src/lib/plans";
 
 export async function GET(request: Request) {
   try {
     const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) {
+      return NextResponse.json({ error: "Port intelligence is included in Captain, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+    }
     const portId = new URL(request.url).searchParams.get("portId");
     if (!portId) return NextResponse.json({ error: "portId is required." }, { status: 400 });
     const ports = await listResource("ports", session.orgId);
