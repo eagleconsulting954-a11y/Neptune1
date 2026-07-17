@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { getWeatherAndOcean } from "@/src/lib/server/maritime";
+import { canAccessModule } from "@/src/lib/plans";
 
 export async function GET(request: Request) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) {
+      return NextResponse.json({ error: "Maritime Intelligence is included in Captain, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+    }
     const url = new URL(request.url);
     const latitude = Number(url.searchParams.get("lat"));
     const longitude = Number(url.searchParams.get("lon"));
