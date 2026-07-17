@@ -4,7 +4,7 @@ import { dashboard } from "@/src/lib/server/db";
 import { buildDecisionInsights } from "@/src/lib/server/decision-insights";
 import { canAccessResource } from "@/src/lib/plans";
 
-function recordsForPlan(data: Record<string, any>, plan: string) {
+function recordsForPlan(data: Record<string, any>, plan: string): Record<string, any> {
   return {
     ...data,
     vessels: canAccessResource(plan, "vessels") ? data.vessels || [] : [],
@@ -65,7 +65,7 @@ export async function GET() {
   try {
     const session = await requireSession();
     const raw = await dashboard(session.orgId);
-    const data = recordsForPlan(raw, session.entitlement.plan);
+    const data: Record<string, any> = recordsForPlan(raw, session.entitlement.plan);
     data.kpis = recalculatedKpis(data);
     const insights = await buildDecisionInsights(session.orgId, data as any);
     return NextResponse.json({ ...data, insights, entitlement: session.entitlement });
