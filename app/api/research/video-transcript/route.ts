@@ -4,10 +4,19 @@ const VIDEO_ID = "s_wGr2TYeHU";
 
 export async function GET() {
   try {
-    const listResponse = await fetch(`https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&type=list`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(30000)
-    });
+    const videoUrl = `https://www.youtube.com/watch?v=${VIDEO_ID}`;
+    const [metadataResponse, listResponse] = await Promise.all([
+      fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30000)
+      }),
+      fetch(`https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&type=list`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30000)
+      })
+    ]);
+    const metadataText = await metadataResponse.text();
+    const metadata = metadataResponse.ok ? JSON.parse(metadataText) : { error: metadataText, status: metadataResponse.status };
     const trackList = await listResponse.text();
     const tracks = Array.from(trackList.matchAll(/<track\s+([^>]+)\/>/g)).map(match => {
       const attributes = Object.fromEntries(Array.from(match[1].matchAll(/(\w+)="([^"]*)"/g)).map(attribute => [attribute[1], attribute[2].replaceAll("&amp;", "&")]));
@@ -17,7 +26,7 @@ export async function GET() {
       || tracks.find(track => String(track.lang_code || "").startsWith("en"))
       || tracks[0];
 
-    if (!selected) return NextResponse.json({ error: "No YouTube caption track was available.", trackList }, { status: 404 });
+    if (!selected) return NextResponse.json({ metadata, error: "No YouTube caption track was available.", availableTracks: tracks });
 
     const params = new URLSearchParams({
       v: VIDEO_ID,
@@ -43,6 +52,7 @@ export async function GET() {
       .filter(segment => segment.text);
 
     return NextResponse.json({
+      metadata,
       status: "success",
       selected,
       availableTracks: tracks,
