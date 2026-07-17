@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { createResource, listResource } from "@/src/lib/server/db";
 import { calculateBunkerPlan, fetchBunkerPrice } from "@/src/lib/server/maritime";
+import { canAccessModule } from "@/src/lib/plans";
+
+function packageError() {
+  return NextResponse.json({ error: "Bunkering intelligence is included in Captain, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+}
 
 export async function GET() {
   try {
     const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) return packageError();
     return NextResponse.json({ plans: await listResource("bunker_plans", session.orgId) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
@@ -17,6 +23,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) return packageError();
     const body = await request.json();
     if (!body.departure_port || !body.destination_port || !body.bunker_port || !body.fuel_type) {
       return NextResponse.json({ error: "Departure, destination, bunker port, and fuel type are required." }, { status: 400 });
