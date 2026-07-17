@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireSession } from "@/src/lib/server/auth";
-
-const plans: Record<string, { name: string; amount: number; priceEnv: string }> = {
-  captain: { name: "Neptune Captain", amount: 49900, priceEnv: "STRIPE_PRICE_CAPTAIN" },
-  fleetops: { name: "Neptune FleetOps", amount: 149900, priceEnv: "STRIPE_PRICE_FLEETOPS" },
-  enterprise: { name: "Neptune Enterprise", amount: 499900, priceEnv: "STRIPE_PRICE_ENTERPRISE" }
-};
+import { normalizePlan, PLAN_CATALOG } from "@/src/lib/plans";
 
 export async function POST(request: Request) {
   try {
@@ -16,27 +11,42 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const planKey = plans[body.plan] ? body.plan : "fleetops";
-    const plan = plans[planKey];
+    const planKey = normalizePlan(body.plan || "captain");
+    const plan = PLAN_CATALOG[planKey];
+    if (plan.price === null) {
+      return NextResponse.json({ error: "Enterprise plans require a custom implementation agreement." }, { status: 400 });
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const priceId = process.env[plan.priceEnv];
+    const priceId = process.env[plan.stripePriceEnv];
     const lineItem = priceId
       ? { price: priceId, quantity: 1 }
-      : { price_data: { currency: "usd", product_data: { name: plan.name }, unit_amount: plan.amount, recurring: { interval: "month" as const } }, quantity: 1 };
+      : {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Neptune ${plan.name}`,
+              description: plan.description
+            },
+            unit_amount: plan.price,
+            recurring: { interval: "month" as const }
+          },
+          quantity: 1
+        };
 
     const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [lineItem],
       customer_email: sessionUser.email,
       success_url: `${appUrl}/api/stripe/confirm?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/trial-expired?cancelled=true`,
+      cancel_url: `${appUrl}/pricing?cancelled=true`,
       metadata: { orgId: sessionUser.orgId, userId: sessionUser.userId, plan: planKey },
       subscription_data: { metadata: { orgId: sessionUser.orgId, plan: planKey } },
       allow_promotion_codes: true
     });
 
-    return NextResponse.json({ url: checkout.url });
+    return NextResponse.json({ url: checkout.url, plan: planKey });
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Login required" }, { status: 401 });
