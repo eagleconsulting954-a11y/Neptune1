@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { geocodeLocation } from "@/src/lib/server/maritime";
+import { canAccessModule } from "@/src/lib/plans";
 
 export async function GET(request: Request) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!canAccessModule(session.entitlement.plan, "maritime_intel")) {
+      return NextResponse.json({ error: "Maritime Intelligence is included in Captain, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+    }
     const query = new URL(request.url).searchParams.get("q")?.trim();
     if (!query || query.length < 2) return NextResponse.json({ error: "A location search of at least two characters is required." }, { status: 400 });
     return NextResponse.json({ results: await geocodeLocation(query) });
