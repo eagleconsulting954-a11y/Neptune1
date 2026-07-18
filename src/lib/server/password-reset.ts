@@ -70,6 +70,80 @@ function resolvePasswordResetSender() {
   return configured;
 }
 
+function ownerTestRecipient(result: any) {
+  const message = String(result?.message || "");
+  const match = message.match(/own email address \(([^()\s]+@[^()\s]+)\)/i);
+  return match?.[1]?.toLowerCase() || null;
+}
+
+function resetEmailContent(input: {
+  name?: string | null;
+  resetUrl: string;
+  accountEmail: string;
+  deliveredToOwnerInbox?: boolean;
+}) {
+  const safeName = escapeHtml(input.name?.trim() || "Neptune operator");
+  const safeUrl = escapeHtml(input.resetUrl);
+  const safeAccountEmail = escapeHtml(input.accountEmail);
+  const ownerNote = input.deliveredToOwnerInbox
+    ? `<p style="color:#e4bb5f;line-height:1.65">This recovery email was delivered to the Neptune owner inbox because the custom sending domain is not verified yet. The link resets <b>${safeAccountEmail}</b>.</p>`
+    : "";
+
+  return {
+    subject: input.deliveredToOwnerInbox ? "Reset the Neptune owner account" : "Reset your Neptune password",
+    text: `${input.deliveredToOwnerInbox ? `This recovery link resets the Neptune owner account ${input.accountEmail}.\n\n` : ""}Open this secure link within ${RESET_TTL_MINUTES} minutes: ${input.resetUrl}\n\nIf you did not request this change, ignore this email.`,
+    html: `
+      <div style="background:#07111e;padding:32px;font-family:Arial,sans-serif;color:#eaf1f8">
+        <div style="max-width:620px;margin:auto;background:#0c1929;border:1px solid #26384d;border-radius:22px;padding:30px">
+          <div style="font-size:12px;letter-spacing:.18em;color:#e4bb5f;font-weight:700">NEPTUNE · SECURE ACCOUNT RECOVERY</div>
+          <h1 style="font-size:32px;line-height:1.15;margin:18px 0 10px">Reset your password</h1>
+          <p style="color:#c4d0dc;line-height:1.65">Hello ${safeName}, a password reset was requested for your Neptune account.</p>
+          ${ownerNote}
+          <p style="color:#c4d0dc;line-height:1.65">This one-time link expires in ${RESET_TTL_MINUTES} minutes.</p>
+          <p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;background:#e4bb5f;color:#07111e;text-decoration:none;font-weight:800;padding:14px 20px;border-radius:12px">Choose a new password</a></p>
+          <p style="color:#8fa1b5;font-size:13px;line-height:1.6">If you did not request this change, ignore this email. Your existing password will remain active.</p>
+        </div>
+      </div>
+    `
+  };
+}
+
+async function deliverResetEmail(input: {
+  apiKey: string;
+  from: string;
+  to: string;
+  accountEmail: string;
+  name?: string | null;
+  resetUrl: string;
+  ownerInbox?: boolean;
+}) {
+  const content = resetEmailContent({
+    name: input.name,
+    resetUrl: input.resetUrl,
+    accountEmail: input.accountEmail,
+    deliveredToOwnerInbox: input.ownerInbox
+  });
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${input.apiKey}`,
+      "content-type": "application/json",
+      "idempotency-key": `password-reset-${tokenHash(`${input.resetUrl}|${input.to}`).slice(0, 32)}`
+    },
+    body: JSON.stringify({
+      from: input.from,
+      to: [input.to],
+      subject: content.subject,
+      text: content.text,
+      html: content.html,
+      tags: [{ name: "category", value: input.ownerInbox ? "owner-password-reset" : "password-reset" }]
+    }),
+    signal: AbortSignal.timeout(15_000)
+  });
+  const result = await response.json().catch(() => ({}));
+  return { response, result };
+}
+
 export async function ensurePasswordResetSchema() {
   await sql(`
     create table if not exists password_reset_tokens (
@@ -133,48 +207,39 @@ export async function sendPasswordResetEmail(input: {
   to: string;
   name?: string | null;
   resetUrl: string;
+  ownerRecovery?: boolean;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("EMAIL_NOT_CONFIGURED");
 
   const from = resolvePasswordResetSender();
-  const safeName = escapeHtml(input.name?.trim() || "Neptune operator");
-  const safeUrl = escapeHtml(input.resetUrl);
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      "idempotency-key": `password-reset-${tokenHash(input.resetUrl).slice(0, 32)}`
-    },
-    body: JSON.stringify({
-      from,
-      to: [input.to],
-      subject: "Reset your Neptune password",
-      text: `A password reset was requested for your Neptune account. Open this secure link within ${RESET_TTL_MINUTES} minutes: ${input.resetUrl}\n\nIf you did not request this change, ignore this email.`,
-      html: `
-        <div style="background:#07111e;padding:32px;font-family:Arial,sans-serif;color:#eaf1f8">
-          <div style="max-width:620px;margin:auto;background:#0c1929;border:1px solid #26384d;border-radius:22px;padding:30px">
-            <div style="font-size:12px;letter-spacing:.18em;color:#e4bb5f;font-weight:700">NEPTUNE · SECURE ACCOUNT RECOVERY</div>
-            <h1 style="font-size:32px;line-height:1.15;margin:18px 0 10px">Reset your password</h1>
-            <p style="color:#c4d0dc;line-height:1.65">Hello ${safeName}, a password reset was requested for your Neptune account.</p>
-            <p style="color:#c4d0dc;line-height:1.65">This one-time link expires in ${RESET_TTL_MINUTES} minutes.</p>
-            <p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;background:#e4bb5f;color:#07111e;text-decoration:none;font-weight:800;padding:14px 20px;border-radius:12px">Choose a new password</a></p>
-            <p style="color:#8fa1b5;font-size:13px;line-height:1.6">If you did not request this change, ignore this email. Your existing password will remain active.</p>
-          </div>
-        </div>
-      `,
-      tags: [{ name: "category", value: "password-reset" }]
-    }),
-    signal: AbortSignal.timeout(15_000)
+  const primary = await deliverResetEmail({
+    apiKey,
+    from,
+    to: input.to,
+    accountEmail: input.to,
+    name: input.name,
+    resetUrl: input.resetUrl
   });
 
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`EMAIL_DELIVERY_FAILED:${response.status}:${JSON.stringify(result).slice(0, 500)}`);
+  if (primary.response.ok) return primary.result;
+
+  const testRecipient = ownerTestRecipient(primary.result);
+  if (input.ownerRecovery && from === RESEND_TEST_SENDER && primary.response.status === 403 && testRecipient) {
+    const fallback = await deliverResetEmail({
+      apiKey,
+      from,
+      to: testRecipient,
+      accountEmail: input.to,
+      name: input.name,
+      resetUrl: input.resetUrl,
+      ownerInbox: true
+    });
+    if (fallback.response.ok) return fallback.result;
+    throw new Error(`EMAIL_DELIVERY_FAILED:${fallback.response.status}:${JSON.stringify(fallback.result).slice(0, 500)}`);
   }
-  return result;
+
+  throw new Error(`EMAIL_DELIVERY_FAILED:${primary.response.status}:${JSON.stringify(primary.result).slice(0, 500)}`);
 }
 
 export async function consumePasswordResetToken(token: string, passwordHash: string) {
