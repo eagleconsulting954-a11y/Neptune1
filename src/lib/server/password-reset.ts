@@ -4,6 +4,19 @@ import { findUserByEmail, sql, type Row } from "@/src/lib/server/db";
 const RESET_TTL_MINUTES = 30;
 const REQUEST_WINDOW_MINUTES = 15;
 const MAX_REQUESTS_PER_WINDOW = 3;
+const RESEND_TEST_SENDER = "Neptune <onboarding@resend.dev>";
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com"
+]);
 
 type PasswordResetRequestResult =
   | null
@@ -36,6 +49,25 @@ function escapeHtml(value: string) {
     "'": "&#39;",
     '"': "&quot;"
   })[character] || character);
+}
+
+function senderAddress(value: string) {
+  const angleMatch = value.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/);
+  return (angleMatch?.[1] || value.trim()).toLowerCase();
+}
+
+function resolvePasswordResetSender() {
+  const configured = String(process.env.PASSWORD_RESET_FROM_EMAIL || "").trim();
+  if (!configured) return RESEND_TEST_SENDER;
+
+  const address = senderAddress(configured);
+  const domain = address.split("@")[1] || "";
+  if (!domain || PUBLIC_EMAIL_DOMAINS.has(domain)) {
+    console.warn(`PASSWORD_RESET_FROM_EMAIL uses an unverified public email domain (${domain || "unknown"}); using Resend test sender until a custom domain is verified.`);
+    return RESEND_TEST_SENDER;
+  }
+
+  return configured;
 }
 
 export async function ensurePasswordResetSchema() {
@@ -105,7 +137,7 @@ export async function sendPasswordResetEmail(input: {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("EMAIL_NOT_CONFIGURED");
 
-  const from = process.env.PASSWORD_RESET_FROM_EMAIL || "Neptune <onboarding@resend.dev>";
+  const from = resolvePasswordResetSender();
   const safeName = escapeHtml(input.name?.trim() || "Neptune operator");
   const safeUrl = escapeHtml(input.resetUrl);
 
@@ -113,7 +145,8 @@ export async function sendPasswordResetEmail(input: {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json"
+      "content-type": "application/json",
+      "idempotency-key": `password-reset-${tokenHash(input.resetUrl).slice(0, 32)}`
     },
     body: JSON.stringify({
       from,
