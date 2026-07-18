@@ -4,6 +4,7 @@ import { findUserByEmail, ensureSchema } from "@/src/lib/server/db";
 import { setAccessCookie, setSession } from "@/src/lib/server/auth";
 import { getEntitlement } from "@/src/lib/server/trial";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
+import { migrateFrancisOwnerAccount } from "@/src/lib/server/owner-migration";
 
 function safeRedirect(value: unknown) {
   const path = String(value || "/dashboard");
@@ -24,11 +25,12 @@ export async function POST(request: Request) {
   let attemptedEmail = "";
   try {
     const body = await request.json().catch(() => ({}));
-    const email = String(body.email || "").toLowerCase();
+    const email = String(body.email || "").trim().toLowerCase();
     attemptedEmail = email;
     const password = String(body.password || "");
     const redirect = safeRedirect(body.from);
     await ensureSchema();
+    await migrateFrancisOwnerAccount();
 
     const user = await findUserByEmail(email);
     if (user && await bcrypt.compare(password, user.password_hash)) {
