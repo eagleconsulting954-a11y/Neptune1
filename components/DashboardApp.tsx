@@ -40,48 +40,48 @@ const RESOURCE_BY_TAB: Record<string, string | null> = {
   Settings: null
 };
 
-const FORM_FIELDS: Record<string, { key: string; label: string; placeholder?: string; type?: string }[]> = {
+type FormField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  options?: string[];
+  optional?: boolean;
+};
+
+const FORM_FIELDS: Record<string, FormField[]> = {
   vessels: [
     { key: "name", label: "Vessel name", placeholder: "Vessel name" },
     { key: "vessel_type", label: "Vessel type", placeholder: "Tanker" },
-    { key: "imo", label: "IMO number", placeholder: "IMO number" },
-    { key: "status", label: "Status", placeholder: "En route" },
+    { key: "imo", label: "IMO number", placeholder: "IMO number", optional: true },
+    { key: "status", label: "Status", options: ["In port", "At anchor", "En route", "Under maintenance", "Out of service"] },
     { key: "readiness", label: "Readiness %", type: "number" },
-    { key: "eta", label: "ETA", placeholder: "Destination and ETA" }
-  ],
-  duties: [
-    { key: "category", label: "Duty type", placeholder: "Hot Work or Inspection" },
-    { key: "title", label: "Duty title", placeholder: "Duty title" },
-    { key: "owner", label: "Owner", placeholder: "Chief Officer" },
-    { key: "location", label: "Location", placeholder: "Work location" },
-    { key: "status", label: "Status", placeholder: "Master approval" },
-    { key: "severity", label: "Severity", placeholder: "critical" },
-    { key: "due_at", label: "Due", placeholder: "2026-08-12 16:00" }
+    { key: "eta", label: "ETA", placeholder: "Destination and ETA", optional: true }
   ],
   work_orders: [
     { key: "title", label: "Work order", placeholder: "Work order title" },
     { key: "owner", label: "Owner", placeholder: "Chief Engineer" },
-    { key: "status", label: "Status", placeholder: "Parts pending" },
-    { key: "priority", label: "Priority", placeholder: "high" },
-    { key: "due_at", label: "Due", placeholder: "2026-08-15" }
+    { key: "status", label: "Status", options: ["Open", "Planned", "In progress", "Parts pending", "Completed", "Closed"] },
+    { key: "priority", label: "Priority", options: ["Low", "Normal", "High", "Critical"] },
+    { key: "due_at", label: "Due", type: "datetime-local" }
   ],
   certificates: [
     { key: "name", label: "Certificate", placeholder: "Certificate name" },
-    { key: "issuer", label: "Issuer", placeholder: "Class Society" },
-    { key: "expires_at", label: "Expiry", type: "date" },
-    { key: "status", label: "Status", placeholder: "Current" }
+    { key: "issuer", label: "Issuer", placeholder: "Class Society", optional: true },
+    { key: "expires_at", label: "Expiry", type: "date", optional: true },
+    { key: "status", label: "Status", options: ["Current", "Expiring soon", "Expired", "Renewal submitted"] }
   ],
   incidents: [
     { key: "title", label: "Incident", placeholder: "Incident title" },
-    { key: "severity", label: "Severity", placeholder: "low" },
-    { key: "status", label: "Status", placeholder: "RCA open" },
+    { key: "severity", label: "Severity", options: ["Low", "Normal", "High", "Critical"] },
+    { key: "status", label: "Status", options: ["Open", "RCA open", "Corrective action", "Monitoring", "Resolved", "Closed"] },
     { key: "owner", label: "Owner", placeholder: "Safety Officer" }
   ],
   crm_accounts: [
     { key: "company", label: "Company", placeholder: "Company name" },
     { key: "contact", label: "Contact", placeholder: "Contact name" },
-    { key: "email", label: "Email", type: "email" },
-    { key: "stage", label: "Stage", placeholder: "Qualified" },
+    { key: "email", label: "Email", type: "email", optional: true },
+    { key: "stage", label: "Stage", options: ["Lead", "Qualified", "Demo booked", "Proposal", "Negotiation", "Won", "Lost"] },
     { key: "annual_value", label: "Annual value", type: "number" }
   ],
   activity_events: [
@@ -91,6 +91,28 @@ const FORM_FIELDS: Record<string, { key: string; label: string; placeholder?: st
   ]
 };
 
+const DUTY_CATEGORIES = ["Hot Work", "Inspection", "Safety", "Navigation", "Cargo", "Maintenance"];
+const DUTY_STATUS = ["Open", "Pending Master Approval", "Approved", "In Progress", "On Hold", "Completed", "Closed"];
+const DUTY_SEVERITY = ["Normal", "High", "Critical"];
+const DUTY_TITLES: Record<string, string[]> = {
+  "Hot Work": ["Welding repair", "Cutting and grinding", "Brazing or soldering", "Boiler or burner work", "Hot work permit review"],
+  Inspection: ["Safety equipment inspection", "Firefighting equipment inspection", "Deck inspection", "Engine-room inspection", "Cargo-space inspection", "Accommodation inspection"],
+  Safety: ["Pre-job safety review", "Toolbox talk", "Emergency equipment check", "PPE compliance check"],
+  Navigation: ["Passage plan review", "Bridge equipment check", "Chart and publication check", "Watch handover review"],
+  Cargo: ["Cargo readiness inspection", "Cargo securing check", "Manifold inspection", "Tank or hold inspection"],
+  Maintenance: ["Planned maintenance inspection", "Machinery condition check", "Repair verification", "Post-maintenance test"]
+};
+
+const DEFAULT_DUTY_OPTIONS = {
+  owners: ["Master", "Chief Officer", "Safety Officer", "Chief Engineer", "Second Engineer", "Bosun", "Deck Officer", "Duty Engineer"],
+  locations: ["Bridge", "Main Deck", "Cargo Deck", "Engine Room", "Workshop", "Pump Room", "Cargo Hold", "Accommodation", "Galley", "Ballast Tank"],
+  configuredOwners: [] as string[],
+  configuredLocations: [] as string[],
+  isConfigured: false,
+  updatedAt: null as string | null
+};
+
+type DutyOptions = typeof DEFAULT_DUTY_OPTIONS;
 type DashboardData = Record<string, any>;
 
 function tabAllowed(data: DashboardData | null, tab: string) {
@@ -117,6 +139,39 @@ function includedKpis(data: DashboardData | null) {
   return cards.filter(card => modules.includes(card.module));
 }
 
+function preferredOption(options: string[], preferred: string) {
+  return options.find(option => option.toLowerCase() === preferred.toLowerCase()) || options[0] || "";
+}
+
+function localDateTime(value: unknown) {
+  if (!value) return "";
+  const raw = String(value).replace(" ", "T");
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw.slice(0, 16);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function defaultDutyDue() {
+  const date = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function splitSetupValues(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/\n|,/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .filter(item => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export function DashboardApp() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [tab, setTab] = useState("Command");
@@ -125,6 +180,14 @@ export function DashboardApp() {
   const [modal, setModal] = useState<{ resource: string; item?: any; title: string } | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [dutyOptions, setDutyOptions] = useState<DutyOptions>(DEFAULT_DUTY_OPTIONS);
+
+  async function loadDutyOptions() {
+    const response = await fetch("/api/v1/settings/duty-options", { cache: "no-store" });
+    if (!response.ok) return;
+    const options = await response.json();
+    setDutyOptions(options);
+  }
 
   async function load() {
     setLoading(true);
@@ -145,6 +208,7 @@ export function DashboardApp() {
     }
     setData(result);
     if (!tabAllowed(result, tab)) setTab("Command");
+    if (result.entitlement?.access?.modules?.includes("delegation")) await loadDutyOptions();
     setLoading(false);
   }
 
@@ -217,15 +281,19 @@ export function DashboardApp() {
       setMessage("Delegation is included in Captain and Full Vessel Access packages.");
       return;
     }
+    const titles = DUTY_TITLES[category] || [];
     setModal({
       resource: "duties",
       title: `New ${category} duty`,
       item: {
         category,
-        owner: category === "Hot Work" ? "Chief Officer" : "Safety Officer",
-        status: "Open",
-        severity: category === "Hot Work" ? "critical" : "normal",
-        due_at: new Date().toISOString().slice(0, 16).replace("T", " ")
+        title: titles[0] || `${category} duty`,
+        owner: preferredOption(dutyOptions.owners, category === "Hot Work" ? "Chief Officer" : "Safety Officer"),
+        location: dutyOptions.locations[0] || "",
+        status: category === "Hot Work" ? "Pending Master Approval" : "Open",
+        severity: category === "Hot Work" ? "Critical" : "Normal",
+        due_at: defaultDutyDue(),
+        vessel_id: data?.vessels?.[0]?.id || ""
       }
     });
   }
@@ -280,18 +348,57 @@ export function DashboardApp() {
             {!isMaritimeIntel && !isCommand && <div className="kpi-grid">{packageKpis.map(card => <div className="kpi" key={`${card.module}-${card.label}`}><span>{card.label}</span><b>{card.value}</b></div>)}</div>}
             {isCommand && <DecisionCommandCenter data={data} openTab={chooseTab} createVessel={() => setModal({ resource: "vessels", title: "Add your first vessel" })} createDuty={() => quickDuty("Inspection")} />}
             {isMaritimeIntel && <MaritimeIntelligence data={data} refresh={load} notify={setMessage} />}
-            {tab === "Settings" && <Settings logout={logout} />}
+            {tab === "Settings" && <Settings logout={logout} canDelegate={canDelegate} dutyOptions={dutyOptions} onSaved={options => { setDutyOptions(options); setMessage("Duty setup saved. Hot Work and Inspection forms now use these dropdown choices."); }} />}
             {resource && <ResourceView resource={resource} rows={visible} edit={item => setModal({ resource, item, title: `Edit ${tab} record` })} remove={id => remove(resource, id)} />}
           </>}
         </section>
       </main>
-      {modal && <RecordModal modal={modal} close={() => setModal(null)} save={save} />}
+      {modal && <RecordModal modal={modal} dutyOptions={dutyOptions} vessels={data?.vessels || []} close={() => setModal(null)} save={save} />}
     </div>
   );
 }
 
-function Settings({ logout }: { logout: () => void }) {
-  return <div className="record-grid"><article className="record"><p className="eyebrow">Organization</p><h3>Organization profile</h3><p>Manage company profile, fleet defaults, and workspace branding.</p><button className="btn" onClick={() => alert("Organization settings require the settings API configuration.")}>Edit profile</button></article><article className="record"><p className="eyebrow">Security</p><h3>Signed sessions</h3><p>HTTP-only session cookies, organization isolation, and protected API routes are active.</p><button className="btn" onClick={() => alert("Connect an email provider to activate user invitations.")}>Invite user</button></article><article className="record"><p className="eyebrow">Account</p><h3>Session controls</h3><p>End the current secure operator session.</p><button className="btn danger" onClick={logout}>Logout</button></article></div>;
+function Settings({ logout, canDelegate, dutyOptions, onSaved }: { logout: () => void; canDelegate: boolean; dutyOptions: DutyOptions; onSaved: (options: DutyOptions) => void }) {
+  const [owners, setOwners] = useState((dutyOptions.configuredOwners.length ? dutyOptions.configuredOwners : dutyOptions.owners).join("\n"));
+  const [locations, setLocations] = useState((dutyOptions.configuredLocations.length ? dutyOptions.configuredLocations : dutyOptions.locations).join("\n"));
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setOwners((dutyOptions.configuredOwners.length ? dutyOptions.configuredOwners : dutyOptions.owners).join("\n"));
+    setLocations((dutyOptions.configuredLocations.length ? dutyOptions.configuredLocations : dutyOptions.locations).join("\n"));
+  }, [dutyOptions]);
+
+  async function saveDutySetup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setStatus("");
+    const response = await fetch("/api/v1/settings/duty-options", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ owners: splitSetupValues(owners), locations: splitSetupValues(locations) })
+    });
+    const result = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setStatus(result.error || "Unable to save duty setup.");
+      return;
+    }
+    setStatus("Saved. These choices now appear in every Hot Work and Inspection form.");
+    onSaved(result);
+  }
+
+  return <div className="settings-layout">
+    {canDelegate && <article className="record duty-setup-card">
+      <div className="duty-setup-head"><div><p className="eyebrow">One-Time Duty Setup</p><h3>Reusable owners and work locations</h3><p>Enter this information once. Neptune will reuse it as dropdown choices whenever your team creates Hot Work, Inspection, Safety, Cargo, Navigation, or Maintenance duties.</p></div><span className={`status ${dutyOptions.isConfigured ? "configured" : ""}`}>{dutyOptions.isConfigured ? "Configured" : "Ready to configure"}</span></div>
+      <form className="form duty-setup-form" onSubmit={saveDutySetup}>
+        <label>Duty owners and shipboard roles<textarea rows={8} value={owners} onChange={event => setOwners(event.target.value)} placeholder="Master&#10;Chief Officer&#10;Safety Officer" /><small>One owner or role per line. Existing duty owners are automatically retained.</small></label>
+        <label>Work locations<textarea rows={8} value={locations} onChange={event => setLocations(event.target.value)} placeholder="Bridge&#10;Main Deck&#10;Engine Room" /><small>One shipboard location per line. Existing duty locations are automatically retained.</small></label>
+        <div className="duty-setup-actions"><button className="btn gold" disabled={saving}>{saving ? "Saving setup..." : "Save dropdown setup"}</button><span>{status}</span></div>
+      </form>
+    </article>}
+    <div className="record-grid settings-secondary"><article className="record"><p className="eyebrow">Organization</p><h3>Organization profile</h3><p>Manage company profile, fleet defaults, and workspace branding.</p><button className="btn" onClick={() => alert("Organization profile editing will be added to the settings API.")}>Edit profile</button></article><article className="record"><p className="eyebrow">Security</p><h3>Signed sessions</h3><p>HTTP-only session cookies, organization isolation, and protected API routes are active.</p><button className="btn" onClick={() => alert("Connect a verified email domain to activate user invitations.")}>Invite user</button></article><article className="record"><p className="eyebrow">Account</p><h3>Session controls</h3><p>End the current secure operator session.</p><button className="btn danger" onClick={logout}>Logout</button></article></div>
+  </div>;
 }
 
 function ResourceView({ resource, rows, edit, remove }: { resource: string; rows: any[]; edit: (item: any) => void; remove: (id: string) => void }) {
@@ -300,7 +407,28 @@ function ResourceView({ resource, rows, edit, remove }: { resource: string; rows
   return <div className="data-grid"><table><thead><tr>{columns.map(column => <th key={column}>{column.replaceAll("_", " ")}</th>)}<th>Actions</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}>{columns.map(column => <td key={column}>{column === "annual_value" ? `$${Number(row[column] || 0).toLocaleString()}` : String(row[column] ?? "—")}</td>)}<td><div className="actions"><button className="btn" onClick={() => edit(row)}>Edit</button>{resource !== "subscriptions" && <button className="btn danger" onClick={() => remove(row.id)}>Delete</button>}</div></td></tr>)}</tbody></table></div>;
 }
 
-function RecordModal({ modal, close, save }: { modal: { resource: string; item?: any; title: string }; close: () => void; save: (event: React.FormEvent<HTMLFormElement>) => void }) {
+function DutyFields({ item, dutyOptions, vessels }: { item?: any; dutyOptions: DutyOptions; vessels: any[] }) {
+  const [category, setCategory] = useState(String(item?.category || "Inspection"));
+  const titles = DUTY_TITLES[category] || [];
+  const selectedTitle = String(item?.title || titles[0] || "");
+  const titleOptions = titles.includes(selectedTitle) || !selectedTitle ? titles : [selectedTitle, ...titles];
+  const owner = String(item?.owner || preferredOption(dutyOptions.owners, category === "Hot Work" ? "Chief Officer" : "Safety Officer"));
+  const location = String(item?.location || dutyOptions.locations[0] || "");
+
+  return <>
+    <div className="duty-form-note"><b>Setup-driven form</b><span>Owners and locations come from Settings → One-Time Duty Setup.</span></div>
+    {vessels.length > 0 && <label>Vessel<select name="vessel_id" defaultValue={item?.vessel_id || vessels[0]?.id || ""}>{vessels.map(vessel => <option key={vessel.id} value={vessel.id}>{vessel.name}{vessel.imo ? ` · ${vessel.imo}` : ""}</option>)}</select></label>}
+    <label>Duty type<select name="category" value={category} onChange={event => setCategory(event.target.value)}>{DUTY_CATEGORIES.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Duty title<select name="title" key={`${category}-${selectedTitle}`} defaultValue={selectedTitle}>{titleOptions.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Owner<select name="owner" defaultValue={owner}>{dutyOptions.owners.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Location<select name="location" defaultValue={location}>{dutyOptions.locations.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Status<select name="status" defaultValue={item?.status || (category === "Hot Work" ? "Pending Master Approval" : "Open")}>{DUTY_STATUS.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Severity<select name="severity" defaultValue={String(item?.severity || (category === "Hot Work" ? "Critical" : "Normal")).replace(/^./, value => value.toUpperCase())}>{DUTY_SEVERITY.map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+    <label>Due<input name="due_at" type="datetime-local" required defaultValue={localDateTime(item?.due_at || defaultDutyDue())} /></label>
+  </>;
+}
+
+function RecordModal({ modal, close, save, dutyOptions, vessels }: { modal: { resource: string; item?: any; title: string }; close: () => void; save: (event: React.FormEvent<HTMLFormElement>) => void; dutyOptions: DutyOptions; vessels: any[] }) {
   const fields = FORM_FIELDS[modal.resource] || [];
-  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className="modal glass premium"><div className="modal-head"><div><p className="eyebrow">Your Organization Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{fields.map(field => <label key={field.key}>{field.label}<input name={field.key} type={field.type || "text"} min={field.key === "readiness" ? 0 : undefined} max={field.key === "readiness" ? 100 : undefined} required={!["imo", "eta", "issuer", "expires_at", "email"].includes(field.key)} defaultValue={modal.item?.[field.key] ?? ""} placeholder={field.placeholder} /></label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
+  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><section className={`modal glass premium ${modal.resource === "duties" ? "duty-modal" : ""}`}><div className="modal-head"><div><p className="eyebrow">Your Organization Record</p><h2>{modal.title}</h2></div><button className="modal-close" onClick={close}>×</button></div><form className="form" onSubmit={save}>{modal.resource === "duties" ? <DutyFields item={modal.item} dutyOptions={dutyOptions} vessels={vessels} /> : fields.map(field => <label key={field.key}>{field.label}{field.options ? <select name={field.key} required={!field.optional} defaultValue={modal.item?.[field.key] ?? field.options[0]}>{field.options.map(option => <option key={option} value={option}>{option}</option>)}</select> : <input name={field.key} type={field.type || "text"} min={field.key === "readiness" ? 0 : undefined} max={field.key === "readiness" ? 100 : undefined} required={!field.optional} defaultValue={field.type === "datetime-local" ? localDateTime(modal.item?.[field.key]) : modal.item?.[field.key] ?? ""} placeholder={field.placeholder} />}</label>)}<div className="actions"><button className="btn gold">Save record</button><button className="btn" type="button" onClick={close}>Cancel</button></div></form></section></div>;
 }
