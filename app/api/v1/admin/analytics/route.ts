@@ -3,8 +3,7 @@ import { requireSession } from "@/src/lib/server/auth";
 import { dashboard } from "@/src/lib/server/db";
 import { canAccessModule } from "@/src/lib/plans";
 import { filterDashboardForPlan } from "@/src/lib/server/plan-dashboard";
-
-const ADMIN_ROLES = new Set(["admin", "platform_admin", "owner", "super_admin"]);
+import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 function monthKey(value: string | Date) {
   const date = new Date(value);
@@ -24,7 +23,9 @@ function recentMonths(count = 6) {
 export async function GET() {
   try {
     const session = await requireSession();
-    if (!ADMIN_ROLES.has(String(session.role).toLowerCase())) return NextResponse.json({ error: "Administrator access required" }, { status: 403 });
+    if (!isDesignatedAdminEmail(session.email)) {
+      return NextResponse.json({ error: "CRM and administrator access is restricted to the designated admin email." }, { status: 403 });
+    }
     if (!canAccessModule(session.entitlement.plan, "analytics")) {
       return NextResponse.json({ error: "Fleet analytics is included in FleetOps, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
     }
