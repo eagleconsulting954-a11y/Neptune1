@@ -40,6 +40,51 @@ const REGULATORY_PROPOSAL = [
   "Create interim guidance, pilot reporting, and a path toward a mandatory code."
 ];
 
+const SOFTWARE_WORKFLOWS = [
+  {
+    module: "Vessels + Digital Twin",
+    title: "Establish the energy baseline",
+    description: "Create an owned data-model workstream for ship-battery capacity, cargo battery exposure, chemistry, cooling, fire zones, remote isolation, and cell-level telemetry.",
+    workstream: "Digital Twin",
+    projectTitle: "Future EV Vessel Energy Baseline and Digital Twin"
+  },
+  {
+    module: "Certificates",
+    title: "Control class and flag evidence",
+    description: "Track the design approvals, class notation, EV Management Plan, annual drill evidence, and regulatory submissions required for the vessel concept.",
+    workstream: "Flag State",
+    projectTitle: "EV Class, Flag, and Management Plan Evidence Register"
+  },
+  {
+    module: "Incidents + Shore Control",
+    title: "Prepare thermal-event response",
+    description: "Turn the 48-hour survival sequence into an accountable SOP covering detection, isolation, cooling, jettison authority, flooding, diversion, and safe re-entry.",
+    workstream: "MASS Shore Control SOP",
+    projectTitle: "48-Hour MASS Thermal Runaway Response and Evidence Workflow"
+  },
+  {
+    module: "Maritime Intelligence",
+    title: "Build the emergency-port network",
+    description: "Develop and validate a route-aware network of ports with battery-fire, hazardous-material, towage, disposal, rescue, and shore-support capability.",
+    workstream: "Emergency Port Network",
+    projectTitle: "EV Emergency Port and Safe-Haven Network"
+  },
+  {
+    module: "Commercial + Insurance",
+    title: "Allocate future loss and liability",
+    description: "Create the charter-party, insurance, pollution, cyber, data-liability, and emergency-port cost package supported by FMEA and class evidence.",
+    workstream: "Commercial & Insurance",
+    projectTitle: "Battery Ship Clause and Future Risk Submission Package"
+  },
+  {
+    module: "Accountability",
+    title: "Assign every decision and deadline",
+    description: "Use Neptune project records to name the responsible owner, accountable executive, next approval gate, evidence URL, blocker, progress, and due date.",
+    workstream: "Shipyard Spec",
+    projectTitle: "Future EV Development Program Governance"
+  }
+];
+
 type Project = Record<string, any>;
 
 type ProjectForm = {
@@ -191,7 +236,7 @@ export function EVFutureProjects() {
 
     <div className="ev-warning-banner"><b>Development framework—not adopted regulation.</b><span>Thresholds, response timings, notations, clauses, and regulatory targets must be validated with class, flag, legal counsel, insurers, shipyards, fire specialists, and port authorities before operational use.</span></div>
 
-    <nav className="ev-tabs">{["Program", "Technical", "Commercial", "Regulatory", "Accountability"].map(item => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item}</button>)}</nav>
+    <nav className="ev-tabs">{["Program", "Technical", "Commercial", "Regulatory", "Software Use", "Accountability"].map(item => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item}</button>)}</nav>
 
     {message && <div className="form-message">{message}</div>}
 
@@ -240,6 +285,24 @@ FMEA · Class approval · Emergency Response Plan · Data architecture · Port c
     {view === "Regulatory" && <div className="ev-section-stack">
       <section className="ev-panel"><div className="ev-panel-head"><div><p className="eyebrow">MASS + EV Code Proposal</p><h2>Build the regulatory case</h2></div><button className="btn gold" onClick={() => openNew("IMO Proposal Deck", "High-Energy Batteries at Sea IMO Proposal")}>Create proposal project</button></div><div className="ev-numbered-list">{REGULATORY_PROPOSAL.map((item, index) => <article key={item}><span>{index + 1}</span><p>{item}</p></article>)}</div></section>
       <section className="ev-panel"><div className="ev-panel-head"><div><p className="eyebrow">Flag State Circular Framework</p><h2>Operational controls for EV and MASS vessels</h2></div><button className="btn" onClick={() => openNew("Flag State", "EV and MASS Flag State Circular Development")}>Create circular project</button></div><div className="ev-check-list"><span>□ Require an applicable EV-ready or battery-powered class notation.</span><span>□ Submit an EV Management Plan before the first voyage.</span><span>□ Conduct an annual battery-fire drill with retained evidence.</span><span>□ Report thermal events above the administration’s defined threshold.</span><span>□ Establish detention, restriction, or corrective-action consequences for non-compliance.</span></div></section>
+    </div>}
+
+    {view === "Software Use" && <div className="ev-section-stack">
+      <section className="ev-panel">
+        <div className="ev-panel-head"><div><p className="eyebrow">Neptune Operational Use</p><h2>Convert the plan into controlled software workflows</h2><p>Each workflow below starts an organization-owned EV project. Neptune stores the owner, executive accountability, evidence link, design gate, deadline, blocker, status, and progress through the existing EV project API.</p></div><button className="btn gold" onClick={() => setView("Accountability")}>Open accountability</button></div>
+        <div className="ev-concept-grid">{SOFTWARE_WORKFLOWS.map(workflow => <article key={workflow.title}><p className="eyebrow">{workflow.module}</p><h3>{workflow.title}</h3><p>{workflow.description}</p><button className="btn" onClick={() => openNew(workflow.workstream, workflow.projectTitle)}>Create linked workstream</button></article>)}</div>
+      </section>
+      <section className="ev-panel">
+        <div className="ev-panel-head"><div><p className="eyebrow">Recommended Neptune Sequence</p><h2>How an operator uses the framework</h2></div></div>
+        <div className="ev-numbered-list">
+          <article><span>1</span><p>Define the future vessel concept and create its Shipyard Spec or Digital Twin workstream.</p></article>
+          <article><span>2</span><p>Assign a responsible owner and accountable executive before any design, class, insurance, or regulatory work begins.</p></article>
+          <article><span>3</span><p>Attach evidence URLs for FMEA, class comments, emergency plans, drill records, port contracts, and proposal decks.</p></article>
+          <article><span>4</span><p>Record the next decision gate, target year, due date, current blocker, and measured progress.</p></article>
+          <article><span>5</span><p>Use the Technical, Commercial, and Regulatory tabs as the control requirements for each linked project.</p></article>
+          <article><span>6</span><p>Review blocked and due-soon work in Accountability until the project is approved or complete.</p></article>
+        </div>
+      </section>
     </div>}
 
     {view === "Accountability" && <section className="ev-accountability">
