@@ -11,6 +11,7 @@ export type ModuleKey =
   | "crm"
   | "analytics"
   | "ev_projects"
+  | "seafarer_safety"
   | "activity"
   | "billing"
   | "settings";
@@ -93,7 +94,7 @@ const FLEETOPS_RESOURCES: ResourceKey[] = [
   "subscriptions"
 ];
 
-const FULL_MODULES = Array.from(new Set([...CAPTAIN_MODULES, ...FLEETOPS_MODULES, "ev_projects" as ModuleKey])) as ModuleKey[];
+const FULL_MODULES = Array.from(new Set([...CAPTAIN_MODULES, ...FLEETOPS_MODULES, "ev_projects" as ModuleKey, "seafarer_safety" as ModuleKey])) as ModuleKey[];
 const FULL_RESOURCES = Array.from(new Set([...CAPTAIN_RESOURCES, ...FLEETOPS_RESOURCES])) as ResourceKey[];
 
 export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
@@ -126,7 +127,8 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       "Commercial CRM and pipeline analytics",
       "Fleet administrator analytics",
       "Multi-vessel fleet management",
-      "Future EV vessel development workspace"
+      "Future EV vessel development workspace",
+      "No Other Master seafarer safety, insurance, and welfare workspace"
     ],
     limits: { vessels: 1, administrators: 1 }
   },
@@ -157,7 +159,8 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       "Port congestion and bunkering planner",
       "MRCC directory",
       "Captain delegation and certificate modules",
-      "Future EV vessel development workspace"
+      "Future EV vessel development workspace",
+      "No Other Master seafarer safety, insurance, and welfare workspace"
     ],
     limits: { vessels: null, administrators: 5 }
   },
@@ -181,6 +184,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       "Delegation, certificates, maintenance, and incidents",
       "Commercial CRM and fleet analytics",
       "Future EV Vessel Projects 2026–2035 workspace",
+      "No Other Master seafarer safety, insurance, and welfare workspace",
       "Multi-vessel command visibility",
       "Up to 5 administrators",
       "Single combined Stripe subscription"
@@ -203,6 +207,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     features: [
       "All Full Vessel Access modules",
       "Future EV Vessel Projects 2026–2035 workspace",
+      "No Other Master seafarer safety, insurance, and welfare workspace",
       "Unlimited organizations",
       "Custom user roles and permissions",
       "Data migration and onboarding",
