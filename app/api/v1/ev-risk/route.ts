@@ -25,7 +25,7 @@ function accessError(error: unknown) {
 
 async function requireEvRiskAccess() {
   const session = await requireSession();
-  if (!canAccessModule(session.entitlement.plan, "ev_risk")) {
+  if (!canAccessModule(session.entitlement.plan, "ev_projects")) {
     throw new Error("PLAN_UPGRADE_REQUIRED");
   }
   return session;
