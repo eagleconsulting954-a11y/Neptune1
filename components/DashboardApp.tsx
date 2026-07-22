@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { DecisionCommandCenter } from "@/components/DecisionCommandCenter";
 import { MaritimeIntelligence } from "@/components/MaritimeIntelligence";
 import { EVFutureProjects } from "@/components/EVFutureProjects";
+import { NoOtherMaster } from "@/components/NoOtherMaster";
 
 const NAV_GROUPS: Record<string, string[]> = {
   Command: ["Command", "Vessels", "CRM"],
   "Voyage Intelligence": ["Maritime Intel"],
   Operations: ["Delegation", "Maintenance", "Certificates", "Incidents"],
+  "Safety & Welfare": ["No Other Master"],
   "Future Programs": ["EV Future"],
   Workspace: ["Activity", "Billing", "Settings"]
 };
@@ -23,6 +25,7 @@ const MODULE_BY_TAB: Record<string, string> = {
   Certificates: "certificates",
   Incidents: "incidents",
   CRM: "crm",
+  "No Other Master": "seafarer_safety",
   "EV Future": "ev_projects",
   Activity: "activity",
   Billing: "billing",
@@ -40,6 +43,7 @@ const RESOURCE_BY_TAB: Record<string, string | null> = {
   Billing: "subscriptions",
   Command: null,
   "Maritime Intel": null,
+  "No Other Master": null,
   "EV Future": null,
   Settings: null
 };
@@ -329,6 +333,8 @@ export function DashboardApp() {
   const isMaritimeIntel = tab === "Maritime Intel";
   const isCommand = tab === "Command";
   const isEVFuture = tab === "EV Future";
+  const isNoOtherMaster = tab === "No Other Master";
+  const isSpecialWorkspace = isMaritimeIntel || isCommand || isEVFuture || isNoOtherMaster;
   const canDelegate = tabAllowed(data, "Delegation");
   const canUseAnalytics = Boolean(data?.entitlement?.access?.modules?.includes("analytics"));
 
@@ -336,7 +342,7 @@ export function DashboardApp() {
     <div className={`dashboard-shell ${menuOpen ? "menu-open" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-head"><div className="brand"><span className="brand-mark">✦</span><span>NEPTUNE<small>Vessel Command</small></span></div><button className="menu-btn" onClick={() => setMenuOpen(false)}>×</button></div>
-        <div className="sidebar-current"><b>{tab}</b><span>{isCommand ? "Fleet trends, alerts, and decision recommendations" : isMaritimeIntel ? "Weather, ocean, ports, bunkering, and rescue intelligence" : isEVFuture ? "Future electric, autonomous, and high-energy vessel development" : "Your organization workspace"}</span></div>
+        <div className="sidebar-current"><b>{tab}</b><span>{isCommand ? "Fleet trends, alerts, and decision recommendations" : isMaritimeIntel ? "Weather, ocean, ports, bunkering, and rescue intelligence" : isEVFuture ? "Future electric, autonomous, and high-energy vessel development" : isNoOtherMaster ? "Seafarer safety, distress, welfare, tracking, insurance, and family care" : "Your organization workspace"}</span></div>
         {data?.entitlement && <div className="sidebar-current"><b>{data.entitlement.planName}</b><span>{data.entitlement.status === "trialing" ? `${data.entitlement.daysRemaining} trial days remaining` : "Active subscription"}</span></div>}
         {visibleNavGroups.map(([group, items]) => <details className="nav-group" open key={group}><summary>{group}<span>{items.length}</span></summary><div className="nav-grid">{items.map(item => <button key={item} className={tab === item ? "active" : ""} onClick={() => chooseTab(item)}>{item}</button>)}</div></details>)}
         {canUseAnalytics && <Link className="btn" style={{ width: "100%", marginTop: 12 }} href="/admin">CRM & Analytics Admin</Link>}
@@ -345,15 +351,16 @@ export function DashboardApp() {
       </aside>
       <button className="mobile-scrim" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
       <main className="main">
-        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : isCommand ? "Open a module to search organization records..." : isEVFuture ? "Use the program views and accountability tracker below..." : "Search your organization records..."} disabled={isMaritimeIntel || isCommand || isEVFuture} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
-        <section className={`workspace glass premium ${isMaritimeIntel ? "maritime-workspace" : ""} ${isEVFuture ? "ev-future-workspace" : ""}`}>
-          {!isMaritimeIntel && !isCommand && !isEVFuture && <div className="workspace-header"><div><p className="eyebrow">Private Organization Workspace</p><h1>{tab}</h1><p className="muted">Every visible module and metric is limited to the access listed for your purchased package.</p></div><div className="actions">{canDelegate && <><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button></>}{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
+        <header className="topbar"><button className="menu-btn" onClick={() => setMenuOpen(true)}>☰</button><div className="search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isMaritimeIntel ? "Use the maritime location search below..." : isCommand ? "Open a module to search organization records..." : isEVFuture ? "Use the program views and accountability tracker below..." : isNoOtherMaster ? "Use the safety, welfare, insurance, and implementation categories below..." : "Search your organization records..."} disabled={isSpecialWorkspace} style={{ background: "transparent", border: 0, outline: 0, width: "100%" }} /></div><button className="profile" onClick={() => chooseTab("Settings")}>FE</button></header>
+        <section className={`workspace glass premium ${isMaritimeIntel ? "maritime-workspace" : ""} ${isEVFuture || isNoOtherMaster ? "ev-future-workspace" : ""}`}>
+          {!isSpecialWorkspace && <div className="workspace-header"><div><p className="eyebrow">Private Organization Workspace</p><h1>{tab}</h1><p className="muted">Every visible module and metric is limited to the access listed for your purchased package.</p></div><div className="actions">{canDelegate && <><button className="btn gold" onClick={() => quickDuty("Hot Work")}>Delegate hot work</button><button className="btn" onClick={() => quickDuty("Inspection")}>Assign inspection</button></>}{resource && FORM_FIELDS[resource] && <button className="btn" onClick={() => setModal({ resource, title: `New ${tab} record` })}>New record</button>}</div></div>}
           {message && <div className="form-message" style={{ marginTop: 12 }}>{message}</div>}
           {loading || !data ? <p className="lede">Loading your organization decision data...</p> : <>
-            {!isMaritimeIntel && !isCommand && !isEVFuture && <div className="kpi-grid">{packageKpis.map(card => <div className="kpi" key={`${card.module}-${card.label}`}><span>{card.label}</span><b>{card.value}</b></div>)}</div>}
+            {!isSpecialWorkspace && <div className="kpi-grid">{packageKpis.map(card => <div className="kpi" key={`${card.module}-${card.label}`}><span>{card.label}</span><b>{card.value}</b></div>)}</div>}
             {isCommand && <DecisionCommandCenter data={data} openTab={chooseTab} createVessel={() => setModal({ resource: "vessels", title: "Add your first vessel" })} createDuty={() => quickDuty("Inspection")} />}
             {isMaritimeIntel && <MaritimeIntelligence data={data} refresh={load} notify={setMessage} />}
             {isEVFuture && <EVFutureProjects />}
+            {isNoOtherMaster && <NoOtherMaster openTab={chooseTab} />}
             {tab === "Settings" && <Settings logout={logout} canDelegate={canDelegate} dutyOptions={dutyOptions} onSaved={options => { setDutyOptions(options); setMessage("Duty setup saved. Hot Work and Inspection forms now use these dropdown choices."); }} />}
             {resource && <ResourceView resource={resource} rows={visible} edit={item => setModal({ resource, item, title: `Edit ${tab} record` })} remove={id => remove(resource, id)} />}
           </>}
