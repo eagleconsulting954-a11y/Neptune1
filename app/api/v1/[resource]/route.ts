@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { createResource, deleteResource, listResource, updateResource, type ResourceName } from "@/src/lib/server/db";
 import { canAccessResource, planDefinition } from "@/src/lib/plans";
+import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 const allowed = new Set<ResourceName>([
   "vessels",
@@ -28,11 +29,16 @@ function assertPlanAccess(plan: string, resource: ResourceName) {
   if (!canAccessResource(plan, resource)) throw new Error("PLAN_UPGRADE_REQUIRED");
 }
 
+function assertIdentityAccess(email: string | undefined, resource: ResourceName) {
+  if (resource === "crm_accounts" && !isDesignatedAdminEmail(email)) throw new Error("ADMIN_EMAIL_REQUIRED");
+}
+
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "UNKNOWN";
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
   if (message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "An active Neptune subscription is required.", code: "SUBSCRIPTION_REQUIRED" }, { status: 402 });
+  if (message === "ADMIN_EMAIL_REQUIRED") return NextResponse.json({ error: "CRM access is restricted to the designated admin email.", code: "ADMIN_EMAIL_REQUIRED" }, { status: 403 });
   if (message === "PLAN_UPGRADE_REQUIRED") return NextResponse.json({ error: "This module is not included in your current package. Upgrade to Full Vessel Access to unlock the complete suite.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
   if (message === "VESSEL_LIMIT_REACHED") return NextResponse.json({ error: "The Captain package supports one vessel. Upgrade to FleetOps or Full Vessel Access to add more vessels.", code: "VESSEL_LIMIT_REACHED" }, { status: 403 });
   if (message === "NOT_FOUND") return NextResponse.json({ error: "Unknown resource" }, { status: 404 });
@@ -45,6 +51,7 @@ export async function GET(_: Request, context: { params: Promise<{ resource: str
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource);
     return NextResponse.json({ items: await listResource(resource, session.orgId) });
   } catch (error) {
@@ -56,6 +63,7 @@ export async function POST(request: Request, context: { params: Promise<{ resour
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource);
 
     if (resource === "vessels") {
@@ -78,6 +86,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ resou
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource);
     const body = await request.json();
     if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -92,6 +101,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ reso
   try {
     const session = await requireSession();
     const resource = await resourceFrom(context);
+    assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
