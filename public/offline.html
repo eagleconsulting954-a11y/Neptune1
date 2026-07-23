@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#071c29" />
+  <title>Neptune Offline Ocean Mode</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 50% 10%,#0d3549 0,#061b28 38%,#020b11 100%);color:#f4f7f8;padding:24px}.card{width:min(620px,100%);padding:34px;border:1px solid rgba(224,186,94,.28);border-radius:24px;background:rgba(4,20,31,.88);box-shadow:0 28px 90px rgba(0,0,0,.42)}.mark{width:64px;height:64px;display:grid;place-items:center;border-radius:18px;background:#e1b95c;color:#071c29;font-size:30px;font-weight:900}p{color:rgba(235,242,245,.72);line-height:1.65}h1{margin:22px 0 8px;font-size:clamp(30px,7vw,52px);letter-spacing:-.035em}.status{display:inline-flex;gap:9px;align-items:center;margin-top:16px;padding:9px 12px;border-radius:999px;background:rgba(225,185,92,.1);color:#f0d38a;font-size:13px}.status i{width:8px;height:8px;border-radius:50%;background:#e1b95c}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}a,button{appearance:none;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:11px 15px;background:transparent;color:#fff;text-decoration:none;font-weight:700;cursor:pointer}.primary{background:#e1b95c;color:#071c29;border-color:#e1b95c}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="mark">✦</div>
+    <div class="status"><i></i> OFFLINE OCEAN MODE</div>
+    <h1>Neptune is operating without a connection.</h1>
+    <p>Open the vessel dashboard to use the last synchronized records stored on this device. New operational records can be queued and will synchronize automatically after satellite, cellular, or port connectivity returns.</p>
+    <p>Live weather, congestion, external pricing, and authority information cannot refresh while offline and must not replace official bridge or GMDSS sources.</p>
+    <div class="actions"><a class="primary" href="/dashboard">Open vessel dashboard</a><button onclick="location.reload()">Retry connection</button></div>
+  </main>
+</body>
+</html>
