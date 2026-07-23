@@ -14,11 +14,29 @@ Neptune1 is a full-stack Next.js maritime CRM and vessel operations platform for
 - MRCC contacts require an authoritative source URL and verification date before they can be stored.
 - Weather, wave, current, congestion, and bunker-price information is planning support only and must not replace official bridge, GMDSS, VTS, ECDIS, NAVTEX, SafetyNET, or charted information.
 
+## Offline ocean operations
+
+Neptune is installable as a Progressive Web App and can continue operating after a vessel loses satellite, cellular, or port connectivity.
+
+- The application shell and last authenticated workspace page are cached after a successful online visit.
+- Successful API responses are stored locally in IndexedDB for the signed-in device.
+- Last-synchronized vessel, delegation, maintenance, certificate, incident, activity, EV-project, duty-setup, CRM-admin, and maritime-intelligence responses remain readable offline when previously loaded.
+- Supported operational writes are accepted locally with temporary offline IDs and placed into an ordered synchronization queue.
+- Queued creates, updates, and deletions synchronize automatically when connectivity returns.
+- Offline-created records are mapped to their permanent PostgreSQL IDs after synchronization.
+- The interface displays offline, queued-change, and synchronization status.
+- Local offline records and queued writes are cleared on logout or when a different account signs in.
+- Live weather, ocean, congestion, external bunker pricing, and authority information remain last-known data until a connection is restored.
+- Initial login, first-time data download, subscription verification, password recovery, Stripe billing, and external-provider refreshes still require connectivity.
+
+Offline use requires one successful authenticated online load on that device before sailing outside coverage. Offline storage is device-local and should only be enabled on company-controlled hardware with operating-system encryption and access controls.
+
 ## Included
 
 - Premium responsive landing page, pricing, resources, signup, login, checkout, vessel dashboard, public demo, tenant CRM admin, and platform owner administration.
 - Multi-tenant organization and user model with signed HTTP-only sessions.
 - PostgreSQL persistence and Stripe subscription billing.
+- Installable offline-capable PWA with a service worker, cached workspace shell, IndexedDB response storage, queued operational writes, and automatic reconnection synchronization.
 - Secure forgot-password flow with hashed one-time tokens, 30-minute expiry, request throttling, one-use enforcement, and Resend email delivery.
 - CRUD APIs for vessels, delegation duties, work orders, certificates, incidents, CRM accounts, activity events, subscriptions, ports, bunkering plans, MRCC contacts, and port-congestion snapshots.
 - Hot-work and inspection delegation workflows.
@@ -67,7 +85,7 @@ It includes:
 - Immediate application bug feed, critical and unresolved counts, recurring error fingerprints, and resolve/reopen controls.
 - Production configuration health for PostgreSQL, authentication, application URL, Stripe, weather, congestion, bunker pricing, and platform-owner access.
 
-Only users with role `platform_admin`, `owner`, or `super_admin`, or emails configured in `PLATFORM_ADMIN_EMAILS`, can load the platform API.
+CRM, tenant administration, analytics administration, and platform-owner APIs are restricted to the single email configured in `NEPTUNE_OWNER_EMAIL`. The production fallback is `francis@canalclear.org`.
 
 ## Maritime intelligence endpoints
 
@@ -103,7 +121,8 @@ npm run dev
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 AUTH_SECRET=long-random-secret
 DATABASE_URL=postgres://user:password@host:5432/neptune
-PLATFORM_ADMIN_EMAILS=comma-separated-owner-emails
+NEPTUNE_OWNER_EMAIL=francis@canalclear.org
+PLATFORM_ADMIN_EMAILS=optional-legacy-list
 ALLOW_DEMO_LOGIN=false
 RESEND_API_KEY=re_...
 PASSWORD_RESET_FROM_EMAIL=Neptune <account@your-verified-domain.com>
