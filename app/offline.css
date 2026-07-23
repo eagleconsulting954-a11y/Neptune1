@@ -1,0 +1,70 @@
+.offline-status {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(360px, calc(100vw - 28px));
+  padding: 13px 15px;
+  border: 1px solid rgba(225, 185, 92, .28);
+  border-radius: 14px;
+  background: rgba(4, 20, 31, .94);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .38);
+  backdrop-filter: blur(16px);
+  color: #f4f7f8;
+}
+
+.offline-status.online {
+  border-color: rgba(80, 196, 154, .34);
+}
+
+.offline-status-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #e1b95c;
+  box-shadow: 0 0 0 5px rgba(225, 185, 92, .12);
+}
+
+.offline-status.online .offline-status-dot {
+  background: #50c49a;
+  box-shadow: 0 0 0 5px rgba(80, 196, 154, .12);
+}
+
+.offline-status.syncing .offline-status-dot {
+  animation: neptuneOfflinePulse 1.1s ease-in-out infinite;
+}
+
+.offline-status div {
+  display: grid;
+  gap: 3px;
+}
+
+.offline-status b {
+  font-size: 13px;
+  letter-spacing: .025em;
+}
+
+.offline-status small {
+  color: rgba(232, 240, 244, .72);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@keyframes neptuneOfflinePulse {
+  0%, 100% { transform: scale(.82); opacity: .58; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  .offline-status {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    width: auto;
+  }
+}
