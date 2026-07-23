@@ -1,4 +1,4 @@
-const VERSION = "neptune-offline-2026-07-23-v2";
+const VERSION = "neptune-offline-2026-07-23-v3";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const STATIC_ASSETS = [
@@ -7,8 +7,7 @@ const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/neptune-app-icon.svg",
-  "/offline-runtime.js",
-  "/offline-page-cache.js"
+  "/neptune-offline.js"
 ];
 
 self.addEventListener("install", event => {
@@ -30,8 +29,7 @@ function isStaticAsset(request, url) {
     || request.destination === "image"
     || url.pathname.startsWith("/_next/static/")
     || url.pathname === "/manifest.webmanifest"
-    || url.pathname === "/offline-runtime.js"
-    || url.pathname === "/offline-page-cache.js";
+    || url.pathname === "/neptune-offline.js";
 }
 
 async function pageResponse(request) {
