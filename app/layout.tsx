@@ -44,8 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <Script src="/offline-runtime.js" strategy="beforeInteractive" />
-        <Script src="/offline-page-cache.js" strategy="afterInteractive" />
+        <Script src="/neptune-offline.js" strategy="beforeInteractive" />
         <GlobalErrorReporter />
         <OfflineStatus />
         {children}
