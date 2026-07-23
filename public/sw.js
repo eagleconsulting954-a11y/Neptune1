@@ -1,4 +1,4 @@
-const VERSION = "neptune-offline-2026-07-23-v1";
+const VERSION = "neptune-offline-2026-07-23-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const STATIC_ASSETS = [
@@ -7,7 +7,8 @@ const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/neptune-app-icon.svg",
-  "/offline-runtime.js"
+  "/offline-runtime.js",
+  "/offline-page-cache.js"
 ];
 
 self.addEventListener("install", event => {
@@ -29,7 +30,8 @@ function isStaticAsset(request, url) {
     || request.destination === "image"
     || url.pathname.startsWith("/_next/static/")
     || url.pathname === "/manifest.webmanifest"
-    || url.pathname === "/offline-runtime.js";
+    || url.pathname === "/offline-runtime.js"
+    || url.pathname === "/offline-page-cache.js";
 }
 
 async function pageResponse(request) {
@@ -64,6 +66,17 @@ async function staticResponse(request) {
   return response;
 }
 
+async function cachePage(urlValue) {
+  const url = new URL(urlValue || "/dashboard", self.location.origin);
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  const request = new Request(url.toString(), { credentials: "include", cache: "no-store" });
+  const response = await fetch(request);
+  const responseUrl = new URL(response.url);
+  if (!response.ok || response.redirected || responseUrl.pathname !== url.pathname) return;
+  const cache = await caches.open(PAGE_CACHE);
+  await cache.put(request, response.clone());
+}
+
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
@@ -79,6 +92,11 @@ self.addEventListener("fetch", event => {
 });
 
 self.addEventListener("message", event => {
-  if (event.data?.type !== "CLEAR_PRIVATE") return;
-  event.waitUntil(caches.delete(PAGE_CACHE));
+  if (event.data?.type === "CLEAR_PRIVATE") {
+    event.waitUntil(caches.delete(PAGE_CACHE));
+    return;
+  }
+  if (event.data?.type === "CACHE_PAGE") {
+    event.waitUntil(cachePage(event.data.url).catch(() => {}));
+  }
 });
