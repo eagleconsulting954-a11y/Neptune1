@@ -1,0 +1,20 @@
+{
+  "name": "Neptune Vessel Command",
+  "short_name": "Neptune",
+  "description": "Offline-capable vessel command, safety, maintenance, compliance, and maritime operations workspace.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#04141f",
+  "theme_color": "#071c29",
+  "categories": ["business", "productivity", "navigation"],
+  "icons": [
+    {
+      "src": "/neptune-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
