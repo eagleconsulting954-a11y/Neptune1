@@ -1,9 +1,10 @@
-const VERSION = "neptune-offline-2026-07-23-v3";
+const VERSION = "neptune-offline-2026-07-27-v4";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const STATIC_ASSETS = [
   "/",
   "/login",
+  "/install",
   "/offline.html",
   "/manifest.webmanifest",
   "/neptune-app-icon.svg",
