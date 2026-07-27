@@ -1,10 +1,12 @@
 {
+  "id": "/dashboard",
   "name": "Neptune Vessel Command",
   "short_name": "Neptune",
-  "description": "Offline-capable vessel command, safety, maintenance, compliance, and maritime operations workspace.",
+  "description": "Offline-capable vessel command, safety, maintenance, compliance, future EV risk, CRM, and maritime operations workspace.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
   "background_color": "#04141f",
   "theme_color": "#071c29",
@@ -15,6 +17,29 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Vessel Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open the Neptune vessel command dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/neptune-app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "CRM and Analytics",
+      "short_name": "CRM",
+      "description": "Open organization CRM and analytics",
+      "url": "/admin",
+      "icons": [{ "src": "/neptune-app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Installation Guide",
+      "short_name": "Install Guide",
+      "description": "View Neptune app installation and offline preparation steps",
+      "url": "/install",
+      "icons": [{ "src": "/neptune-app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]
 }
