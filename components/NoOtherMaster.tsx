@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmergencyGpsTracker } from "@/components/EmergencyGpsTracker";
 
 type Props = {
   openTab: (tab: string) => void;
@@ -86,6 +87,7 @@ export function NoOtherMaster({ openTab }: Props) {
         <div className="ev-panel-head"><div><p className="eyebrow">Module 2 · Bridge, DPA, CSO</p><h2>Distress & Emergency Response</h2><p>SaaS direction: one-click distress, live GPS, photo upload, muster status, and automatic logbook.</p></div><button className="btn gold" onClick={() => openTab("Incidents")}>Open incidents</button></div>
         <div className="ev-numbered-list">{DISTRESS_CONTACTS.map(([number, name, contact]) => <article key={number}><span>{number}</span><p><b>{name}</b><br />{contact}</p></article>)}</div>
       </section>
+      <EmergencyGpsTracker />
       <section className="ev-concept-grid"><article><p className="eyebrow">Position and rescue</p><h3>Nearest verified response</h3><p>Use Maritime Intelligence to locate saved MRCC/JRCC contacts and route context.</p><button className="btn" onClick={() => openTab("Maritime Intel")}>Open MRCC tools</button></article><article><p className="eyebrow">Event record</p><h3>Open the incident trail</h3><p>Record severity, responsible owner, corrective action, status, and supporting evidence.</p><button className="btn" onClick={() => openTab("Incidents")}>Record incident</button></article><article><p className="eyebrow">Muster and assignments</p><h3>Assign emergency duties</h3><p>Use the delegation workflow to assign Safety or Navigation actions and retain closeout responsibility.</p><button className="btn" onClick={() => openTab("Delegation")}>Assign response</button></article></section>
     </div>}
 
