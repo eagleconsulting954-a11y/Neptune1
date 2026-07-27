@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstallAppButton } from "@/components/InstallAppButton";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PLAN_CATALOG, type PlanKey } from "@/src/lib/plans";
 
@@ -40,7 +41,8 @@ const faq = [
   ["Will Neptune add sample information to my workspace?", "No. New workspaces start empty. Dashboard totals, alerts, trends, and recommendations begin with information entered by your organization."],
   ["What happens after 14 days?", "The workspace is automatically paused. Your records stay stored, and access returns after an active subscription is confirmed."],
   ["Is Maritime Intelligence a navigation system?", "No. It supports planning and operational awareness. It does not replace official bridge systems, charts, GMDSS, VTS, NAVTEX, SafetyNET, ECDIS, or required maritime procedures."],
-  ["Can one subscription unlock both onboard and shore-side tools?", "Yes. Full Vessel Access combines the Captain and FleetOps packages into one subscription with the complete Neptune module set."]
+  ["Can one subscription unlock both onboard and shore-side tools?", "Yes. Full Vessel Access combines the Captain and FleetOps packages into one subscription with the complete Neptune module set."],
+  ["Can Neptune be installed as an app?", "Yes. Customers can install Neptune directly from the website on supported phones, tablets, and computers. The installed app uses the same secure account and receives updates from the live platform."]
 ];
 
 const packageOrder: PlanKey[] = ["captain", "fleetops", "full_vessel_access"];
@@ -60,6 +62,7 @@ export default function HomePage() {
               <div className="hero-actions">
                 <Link className="btn gold psych-primary-cta" href="/signup">Start a 14-day package trial</Link>
                 <Link className="btn" href="/demo">See the product flow</Link>
+                <InstallAppButton className="btn psych-install-cta" label="Download app" />
                 <Link className="psych-text-link" href="/pricing">Compare package access →</Link>
               </div>
               <div className="psych-reassurance">
@@ -94,7 +97,7 @@ export default function HomePage() {
             <span>Protected package APIs</span>
             <span>Decision alerts from real records</span>
             <span>Stripe subscription support</span>
-            <span>Mobile vessel workflow</span>
+            <span>Installable vessel app</span>
           </div>
         </section>
 
@@ -137,6 +140,23 @@ export default function HomePage() {
               <p>No jargon-heavy feature wall. Each part of Neptune exists to make a vessel or fleet decision easier to understand and easier to own.</p>
             </div>
             <div className="psych-module-grid">{operatingModules.map(([title, text], index) => <article className="card" key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+          </div>
+        </section>
+
+        <section className="section psych-app-section" id="download-app">
+          <div className="container psych-app-grid glass premium">
+            <div className="psych-app-copy">
+              <p className="eyebrow">Neptune App</p>
+              <h2>Put vessel command on the home screen.</h2>
+              <p className="lede">Install Neptune directly from the website on supported phones, tablets, and computers. The app opens in a standalone window, uses the same secure login, and updates automatically with the live platform.</p>
+              <div className="hero-actions"><InstallAppButton className="btn gold" label="Download Neptune app" /><Link className="btn" href="/install">View installation instructions</Link></div>
+              <div className="psych-app-benefits"><span>Android</span><span>iPhone & iPad</span><span>Windows & macOS</span><span>Offline-ready workflow</span></div>
+            </div>
+            <div className="psych-app-preview">
+              <img src="/neptune-app-icon.svg" alt="Neptune app icon" />
+              <div><span>NEPTUNE</span><b>Vessel Command</b><small>Installed from neptune1.vercel.app</small></div>
+              <strong>INSTALL</strong>
+            </div>
           </div>
         </section>
 
@@ -193,7 +213,7 @@ export default function HomePage() {
         <section className="section psych-final-section">
           <div className="container psych-final-cta glass premium">
             <div><p className="eyebrow">Do not wait for the missing record to become the incident</p><h2>Put the next vessel decision where the whole team can see it.</h2><p>Start with the package your team needs. Neptune will keep every other module outside the workspace until the subscription includes it.</p></div>
-            <div className="psych-final-actions"><Link className="btn gold" href="/signup">Start the 14-day trial</Link><Link className="btn" href="/pricing">Choose the right package</Link><small>Workspace access pauses automatically when the trial ends.</small></div>
+            <div className="psych-final-actions"><Link className="btn gold" href="/signup">Start the 14-day trial</Link><InstallAppButton className="btn" label="Download app" /><Link className="btn" href="/pricing">Choose the right package</Link><small>Workspace access pauses automatically when the trial ends.</small></div>
           </div>
         </section>
       </main>
