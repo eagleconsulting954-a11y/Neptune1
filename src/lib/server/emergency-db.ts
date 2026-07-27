@@ -80,6 +80,13 @@ export async function ensureEmergencySchema() {
   `);
 }
 
+async function validatedVesselId(orgId: string, vesselId: string | null | undefined) {
+  if (!vesselId) return null;
+  const [vessel] = await sql(`select id from vessels where id=$1 and org_id=$2 limit 1`, [vesselId, orgId]);
+  if (!vessel) throw new Error("VESSEL_NOT_FOUND");
+  return vesselId;
+}
+
 export async function listEmergencyEvents(orgId: string, limit = 20) {
   await ensureEmergencySchema();
   return sql(`select * from emergency_events where org_id=$1 order by started_at desc limit $2`, [orgId, Math.min(Math.max(limit, 1), 100)]);
@@ -91,6 +98,7 @@ export async function createEmergencyEvent(orgId: string, input: EmergencyEventI
   const startedAt = validDate(input.started_at);
   const title = String(input.title || "Emergency GPS tracking").slice(0, 180);
   const status = String(input.status || "Active").slice(0, 40);
+  const vesselId = await validatedVesselId(orgId, input.vessel_id);
   const [created] = await sql(`
     insert into emergency_events(id, org_id, vessel_id, title, status, source_device_id, started_at, ended_at, notes)
     values($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -107,7 +115,7 @@ export async function createEmergencyEvent(orgId: string, input: EmergencyEventI
   `, [
     eventId,
     orgId,
-    input.vessel_id || null,
+    vesselId,
     title,
     status,
     input.source_device_id || null,
@@ -122,7 +130,7 @@ export async function createEmergencyEvent(orgId: string, input: EmergencyEventI
 export async function updateEmergencyEvent(orgId: string, input: EmergencyEventInput & { id: string }) {
   await ensureEmergencySchema();
   const allowed: Record<string, unknown> = {};
-  if (Object.prototype.hasOwnProperty.call(input, "vessel_id")) allowed.vessel_id = input.vessel_id || null;
+  if (Object.prototype.hasOwnProperty.call(input, "vessel_id")) allowed.vessel_id = await validatedVesselId(orgId, input.vessel_id);
   if (Object.prototype.hasOwnProperty.call(input, "title")) allowed.title = String(input.title || "Emergency GPS tracking").slice(0, 180);
   if (Object.prototype.hasOwnProperty.call(input, "status")) allowed.status = String(input.status || "Active").slice(0, 40);
   if (Object.prototype.hasOwnProperty.call(input, "ended_at")) allowed.ended_at = input.ended_at ? validDate(input.ended_at) : null;
