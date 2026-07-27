@@ -18,19 +18,25 @@ import "./duty-workflow.css";
 import "./ev-future.css";
 import "./offline.css";
 import "./install-app.css";
+import "./app-download.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Maritime Intelligence",
   description: "Neptune helps captains and fleet operators protect the vessel, crew, and schedule with accountable workflows, decision alerts, package-specific access, maritime intelligence, future EV vessel development programs, and offline ocean operations.",
+  applicationName: "Neptune Vessel Command",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/neptune-app-icon.svg",
+    shortcut: "/neptune-app-icon.svg",
     apple: "/neptune-app-icon.svg"
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Neptune"
+  },
+  formatDetection: {
+    telephone: false
   }
 };
 
