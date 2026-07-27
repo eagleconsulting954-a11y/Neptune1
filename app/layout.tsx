@@ -19,6 +19,7 @@ import "./ev-future.css";
 import "./offline.css";
 import "./install-app.css";
 import "./app-download.css";
+import "./emergency-gps.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Maritime Intelligence",
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <Script src="/neptune-offline.js" strategy="beforeInteractive" />
+        <Script src="/neptune-emergency-offline.js" strategy="beforeInteractive" />
         <GlobalErrorReporter />
         <OfflineStatus />
         {children}
