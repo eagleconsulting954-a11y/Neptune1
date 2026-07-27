@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstallAppButton } from "@/components/InstallAppButton";
 
 export function SiteHeader() {
   return (
@@ -13,6 +14,7 @@ export function SiteHeader() {
           <Link href="/pricing">Pricing</Link>
           <Link href="/admin">Admin</Link>
           <Link href="/login">Login</Link>
+          <InstallAppButton className="btn install-nav-button" label="Download app" />
           <Link className="btn gold" href="/signup">Start trial</Link>
         </nav>
       </div>
