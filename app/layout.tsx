@@ -17,6 +17,7 @@ import "./psychology-landing.css";
 import "./duty-workflow.css";
 import "./ev-future.css";
 import "./offline.css";
+import "./install-app.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command CRM & Maritime Intelligence",
