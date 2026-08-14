@@ -162,6 +162,39 @@ const migrations = [
       alter table user_invitations
       add column if not exists can_edit_vessels boolean not null default false;
     `
+  },
+  {
+    id: "20260813_005_passkeys",
+    sql: `
+      create table if not exists webauthn_credentials (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        org_id text not null references organizations(id) on delete cascade,
+        credential_id text not null unique,
+        public_key bytea not null,
+        counter bigint not null default 0,
+        device_type text,
+        backed_up boolean not null default false,
+        transports jsonb not null default '[]'::jsonb,
+        label text,
+        last_used_at timestamptz,
+        created_at timestamptz not null default now()
+      );
+      create index if not exists idx_webauthn_credentials_user on webauthn_credentials(user_id,created_at desc);
+      create index if not exists idx_webauthn_credentials_org on webauthn_credentials(org_id,created_at desc);
+
+      create table if not exists webauthn_challenges (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        purpose text not null,
+        challenge text not null,
+        expires_at timestamptz not null,
+        used_at timestamptz,
+        created_at timestamptz not null default now()
+      );
+      create index if not exists idx_webauthn_challenges_user on webauthn_challenges(user_id,purpose,created_at desc);
+      create index if not exists idx_webauthn_challenges_expiry on webauthn_challenges(expires_at,used_at);
+    `
   }
 ] as const;
 
