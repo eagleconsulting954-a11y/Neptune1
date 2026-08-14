@@ -5,20 +5,11 @@ import { setAccessCookie, setSession } from "@/src/lib/server/auth";
 import { getEntitlement } from "@/src/lib/server/trial";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
 import { migrateFrancisOwnerAccount } from "@/src/lib/server/owner-migration";
+import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 function safeRedirect(value: unknown) {
   const path = String(value || "/dashboard");
   return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
-}
-
-function platformAdminAllowed(role: string, email: string) {
-  const configured = [process.env.PLATFORM_ADMIN_EMAILS, process.env.NEPTUNE_OWNER_EMAIL]
-    .filter(Boolean)
-    .join(",")
-    .split(",")
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean);
-  return ["platform_admin", "owner", "super_admin"].includes(String(role).toLowerCase()) || configured.includes(email.toLowerCase());
 }
 
 export async function POST(request: Request) {
@@ -35,7 +26,7 @@ export async function POST(request: Request) {
     const user = await findUserByEmail(email);
     if (user && await bcrypt.compare(password, user.password_hash)) {
       await setSession({ userId: user.id, orgId: user.org_id, role: user.role, email: user.email });
-      if (platformAdminAllowed(user.role, user.email) && redirect.startsWith("/platform-admin")) {
+      if (isDesignatedAdminEmail(user.email) && redirect.startsWith("/platform-admin")) {
         return NextResponse.json({ ok: true, redirect: "/platform-admin", platformAdmin: true });
       }
 
