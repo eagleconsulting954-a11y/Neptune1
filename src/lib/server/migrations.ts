@@ -155,6 +155,13 @@ const migrations = [
         end if;
       end $$;
     `
+  },
+  {
+    id: "20260813_004_invitation_edit_permissions",
+    sql: `
+      alter table user_invitations
+      add column if not exists can_edit_vessels boolean not null default false;
+    `
   }
 ] as const;
 
