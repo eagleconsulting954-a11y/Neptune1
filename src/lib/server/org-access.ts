@@ -113,7 +113,7 @@ export async function listOrganizationUsers(orgId: string) {
 
 export async function listOrganizationInvitations(orgId: string) {
   return sql<Row>(`
-    select id,email,role,vessel_ids,expires_at,accepted_at,revoked_at,created_at
+    select id,email,role,vessel_ids,can_edit_vessels,expires_at,accepted_at,revoked_at,created_at
     from user_invitations where org_id=$1 order by created_at desc limit 100
   `, [orgId]);
 }
@@ -183,19 +183,20 @@ export async function createOrganizationInvitation(input: {
   const existing = await findUserByEmail(email);
   if (existing) throw new Error(existing.org_id === input.session.orgId ? "USER_ALREADY_IN_ORG" : "EMAIL_ALREADY_REGISTERED");
   const vesselIds = await validateVesselIds(input.session.orgId, input.vesselIds || []);
+  const canEditVessels = Boolean(input.canEditVessels);
   await sql("update user_invitations set revoked_at=coalesce(revoked_at,now()) where org_id=$1 and lower(email)=lower($2) and accepted_at is null and revoked_at is null", [input.session.orgId, email]);
   const token = randomBytes(32).toString("base64url");
   const invitationId = `invite_${randomUUID()}`;
   const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
   await sql(`
-    insert into user_invitations(id,org_id,email,role,vessel_ids,invited_by,token_hash,expires_at)
-    values($1,$2,$3,$4,$5,$6,$7,$8)
-  `, [invitationId, input.session.orgId, email, role, JSON.stringify(vesselIds), input.session.userId, inviteHash(token), expiresAt]);
+    insert into user_invitations(id,org_id,email,role,vessel_ids,can_edit_vessels,invited_by,token_hash,expires_at)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9)
+  `, [invitationId, input.session.orgId, email, role, JSON.stringify(vesselIds), canEditVessels, input.session.userId, inviteHash(token), expiresAt]);
   const [org] = await sql<Row>("select name from organizations where id=$1", [input.session.orgId]);
   const inviteUrl = `${input.appUrl.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(token)}`;
   await sendInvitationEmail({ to: email, inviter: input.inviterName || input.session.email || "A Neptune administrator", organization: org?.name || "your organization", inviteUrl, role });
-  await recordAuditEvent({ session: input.session, action: "organization.user_invited", entityType: "user_invitation", entityId: invitationId, request: input.request, metadata: { email, role, vesselIds } });
-  return { id: invitationId, email, role, vesselIds, expiresAt };
+  await recordAuditEvent({ session: input.session, action: "organization.user_invited", entityType: "user_invitation", entityId: invitationId, request: input.request, metadata: { email, role, vesselIds, canEditVessels } });
+  return { id: invitationId, email, role, vesselIds, canEditVessels, expiresAt };
 }
 
 export async function acceptOrganizationInvitation(input: { token: string; name: string; password: string }) {
@@ -216,9 +217,9 @@ export async function acceptOrganizationInvitation(input: { token: string; name:
     returning id,org_id,name,email,role,email_verified_at,is_active
   `, [userId, invitation.org_id, input.name.trim().slice(0, 160), invitation.email, hash, invitation.role]);
   const vesselIds = Array.isArray(invitation.vessel_ids) ? invitation.vessel_ids.map(String) : [];
-  await replaceVesselPermissions(invitation.org_id, userId, vesselIds, false);
+  await replaceVesselPermissions(invitation.org_id, userId, vesselIds, Boolean(invitation.can_edit_vessels));
   await sql("update user_invitations set accepted_at=now() where id=$1", [invitation.id]);
-  await recordAuditEvent({ session: { userId, orgId: invitation.org_id, email: invitation.email }, action: "organization.invitation_accepted", entityType: "user", entityId: userId, metadata: { role: invitation.role } });
+  await recordAuditEvent({ session: { userId, orgId: invitation.org_id, email: invitation.email }, action: "organization.invitation_accepted", entityType: "user", entityId: userId, metadata: { role: invitation.role, canEditVessels: Boolean(invitation.can_edit_vessels) } });
   return user;
 }
 
