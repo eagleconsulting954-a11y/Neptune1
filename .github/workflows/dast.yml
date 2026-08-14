@@ -1,0 +1,68 @@
+name: Neptune OWASP ZAP Baseline
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "41 6 * * 4"
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_SECRET: zap-build-only-neptune-secret
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      ALLOW_DEMO_LOGIN: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-fund --no-audit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Start production application
+        run: |
+          npm run start -- -p 3000 > /tmp/neptune-zap.log 2>&1 &
+          echo $! > /tmp/neptune-zap.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/neptune-zap.log
+          exit 1
+
+      - name: Run OWASP ZAP baseline
+        continue-on-error: true
+        run: |
+          docker run --network host --rm \
+            -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:3000 -I -J zap-report.json -r zap-report.html
+
+      - name: Upload ZAP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neptune-zap-baseline
+          path: |
+            zap-report.json
+            zap-report.html
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Show Neptune server log
+        if: failure()
+        run: cat /tmp/neptune-zap.log || true
