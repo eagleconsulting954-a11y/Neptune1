@@ -1,0 +1,21 @@
+import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
+
+const controls = [
+  ["Identity", "Verified email, authenticator MFA, WebAuthn passkeys, revocable server-side sessions, and login lockout controls."],
+  ["Authorization", "Organization isolation, role controls, vessel-level view/edit permissions, and exact two-identity CRM/platform-admin access."],
+  ["Audit", "Security and material data changes are appended to an organization audit stream protected against update/delete at the database layer."],
+  ["Offline devices", "Managed device inventory, offline queue visibility, GPS permission state, device revocation, and reconnect-triggered local-data wipe requests."],
+  ["Application boundary", "CSP, HSTS, frame denial, MIME protection, referrer policy, permissions policy, and protected administrative/bootstrap routes."],
+  ["Software supply chain", "Pinned framework versions, GitHub CI type/build/security/HTTP tests, high-severity dependency audit, and Dependabot monitoring."],
+  ["Database changes", "Versioned migrations use a migration ledger, PostgreSQL advisory lock, and transaction-per-migration execution."],
+  ["Resilience", "A disaster-recovery runbook is maintained; production backup/PITR and restore evidence must be configured at the selected database provider before enterprise SLA claims."]
+];
+
+export default function TrustPage() {
+  return <div className="psych-landing"><SiteHeader /><main>
+    <section className="psych-hero"><div className="container psych-hero-grid"><div className="psych-hero-copy"><p className="eyebrow">Neptune Trust Center</p><h1>Security controls that can be explained and tested.</h1><p className="lede">Neptune separates implemented application controls from external assurance work. This page describes the current product architecture without claiming certifications or contractual uptime that have not been independently established.</p><div className="hero-actions"><Link className="btn gold" href="/status">View service status</Link><Link className="btn" href="/login">Secure login</Link></div></div><div className="psych-command-preview glass premium"><div className="psych-preview-head"><div><p className="eyebrow">Identity boundary</p><h2>Two designated platform administrators</h2></div></div><p>CRM and platform administration are not customer-plan permissions. They are restricted in application code to exactly two approved administrator identities.</p><div className="psych-preview-output"><article><span>Customer access</span><b>Organization + role + vessel scope</b><small>Enforced by protected APIs</small></article><article><span>Privileged access</span><b>Exact email allowlist</b><small>Not widened by environment variables</small></article></div></div></div></section>
+    <section className="section"><div className="container"><div className="psych-section-intro"><div><p className="eyebrow">Implemented controls</p><h2>Defense in depth across identity, data, devices, and deployment.</h2></div></div><div className="psych-module-grid">{controls.map(([title,text], index) => <article className="card" key={title}><span>{String(index + 1).padStart(2,"0")}</span><h3>{title}</h3><p>{text}</p></article>)}</div></div></section>
+    <section className="section"><div className="container psych-proof-grid"><div><p className="eyebrow">Independent assurance</p><h2>No unsupported certification claims.</h2><p className="lede">Neptune should complete an independent penetration test, infrastructure backup/restore exercise, contractual privacy review, and any selected SOC 2 or other assurance program before those are represented as completed to enterprise buyers.</p></div><div className="psych-proof-checks"><article><b>Penetration test</b><span>Required before broad enterprise rollout; not represented here as completed.</span></article><article><b>SOC 2</b><span>No SOC 2 attestation is claimed by this page.</span></article><article><b>Backup/PITR</b><span>Must be enabled and restore-tested at the production PostgreSQL provider.</span></article><article><b>Legal documents</b><span>Terms, privacy, DPA, retention, and subprocessor commitments require review appropriate to the business and jurisdictions served.</span></article></div></div></section>
+  </main></div>;
+}
