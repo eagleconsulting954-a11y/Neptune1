@@ -237,6 +237,32 @@ const migrations = [
       from (select org_id from users where lower(email)=lower('francis@canalclear.org') limit 1) p
       on conflict (id) do nothing;
     `
+  },
+  {
+    id: "20260814_007_verify_secondary_designated_admin_login",
+    sql: `
+      do $$
+      declare primary_org text;
+      begin
+        select org_id into primary_org from users where lower(email)=lower('francis@canalclear.org') limit 1;
+        if primary_org is null then
+          raise exception 'Primary designated administrator account is missing';
+        end if;
+
+        if not exists (
+          select 1
+          from users
+          where lower(email)=lower('rajput.jaspal@yahoo.in')
+            and org_id=primary_org
+            and role='org_admin'
+            and is_active=true
+            and email_verified_at is not null
+            and password_hash='$2b$12$WkccaQTHQ.6wk.a1Rf9v9uqeX.2m2of59tKQuNf2FMZNVBZ31heRa'
+        ) then
+          raise exception 'Secondary designated administrator provisioning verification failed';
+        end if;
+      end $$;
+    `
   }
 ] as const;
 
