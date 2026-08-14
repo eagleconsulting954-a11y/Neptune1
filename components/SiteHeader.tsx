@@ -5,7 +5,7 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="container header-inner">
-        <Link className="brand" href="/" aria-label="Neptune home"><span className="brand-mark" aria-hidden="true">✦</span><span>NEPTUNE<small>Vessel Command CRM</small></span></Link>
+        <Link className="brand" href="/" aria-label="Neptune home"><span className="brand-mark" aria-hidden="true">✦</span><span>NEPTUNE<small>Vessel Command</small></span></Link>
         <nav className="nav" aria-label="Primary navigation">
           <Link href="/#platform">Platform</Link>
           <Link href="/#modules">Modules</Link>
