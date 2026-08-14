@@ -41,6 +41,13 @@ assert("login lockout", login.includes("assertLoginAllowed") && login.includes("
 assert("MFA login", login.includes("verifyUserMfa") && login.includes("MFA_REQUIRED"), "MFA is not enforced at login");
 assert("revocable sessions", login.includes("setSession") && login.includes("deviceLabel"), "device-aware persisted sessions missing");
 
+const passkeyApi = read("app/api/auth/passkey/route.ts");
+const passkeys = read("src/lib/server/passkeys.ts");
+assert("passkey login", passkeyApi.includes("finishPasskeyAuthentication") && passkeyApi.includes("setSession"), "passkey login flow missing");
+assert("passkey user verification", passkeys.includes('userVerification: "required"') && passkeys.includes("requireUserVerification: true"), "passkeys do not require user verification");
+assert("passkey challenge persistence", passkeys.includes("webauthn_challenges") && passkeys.includes("consumeChallenge"), "passkey challenges are not persisted and consumed");
+assert("passkey public key persistence", passkeys.includes("webauthn_credentials") && passkeys.includes("public_key"), "passkey public keys are not persisted");
+
 const auth = read("src/lib/server/auth.ts");
 assert("session validation", auth.includes("validateAuthSession") && auth.includes("revokeAuthSession"), "signed sessions are not revocable");
 
@@ -48,6 +55,7 @@ const migrations = read("src/lib/server/migrations.ts");
 assert("versioned migrations", migrations.includes("schema_migrations") && migrations.includes("pg_advisory_lock"), "versioned migration runner missing");
 assert("immutable audit", migrations.includes("trg_neptune_audit_immutable") && migrations.includes("before update or delete on audit_events"), "audit mutation block missing");
 assert("managed devices schema", migrations.includes("create table if not exists managed_devices"), "managed device schema missing");
+assert("passkey schema", migrations.includes("create table if not exists webauthn_credentials") && migrations.includes("create table if not exists webauthn_challenges"), "passkey database schema missing");
 
 const security = read("src/lib/server/security.ts");
 assert("TOTP MFA", security.includes("otpauth://totp") && security.includes("mfa_recovery_codes"), "TOTP MFA implementation missing");
@@ -66,9 +74,15 @@ for (const header of ["Content-Security-Policy", "Strict-Transport-Security", "P
   assert(`security header ${header}`, nextConfig.includes(header), `${header} is missing`);
 }
 
+const workflow = read(".github/workflows/build.yml");
+assert("Node 22 CI", workflow.includes("node-version: 22"), "CI must use a supported Node release");
+assert("HTTP integration gate", workflow.includes("npm run test:http"), "production HTTP integration tests are not part of CI");
+assert("dependency audit gate", workflow.includes("npm run audit:high"), "high-severity dependency audit is not part of CI");
+
 const packageJson = JSON.parse(read("package.json"));
 assert("secure Next.js line", packageJson.dependencies.next === "16.3.1", "Next.js is not pinned to the audited secure release");
 assert("patched React", packageJson.dependencies.react === "19.2.8" && packageJson.dependencies["react-dom"] === "19.2.8", "React RSC security patch is not pinned");
+assert("passkey packages pinned", packageJson.dependencies["@simplewebauthn/server"] === "13.3.2" && packageJson.dependencies["@simplewebauthn/browser"] === "13.3.0", "WebAuthn dependencies are not pinned");
 
 console.log(`Neptune security smoke checks passed: ${checks.length}`);
 for (const check of checks) console.log(`✓ ${check.name}`);
