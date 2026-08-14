@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createOrganizationAndAdmin, findUserByEmail } from "@/src/lib/server/db";
 import { setAccessCookie, setSession } from "@/src/lib/server/auth";
-import { getEntitlement } from "@/src/lib/server/trial";
+import { startTrial } from "@/src/lib/server/trial";
 import { normalizePlan } from "@/src/lib/plans";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
 import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
