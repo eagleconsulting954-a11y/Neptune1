@@ -12,6 +12,7 @@ export function SiteHeader() {
           <Link href="/demo">Live Demo</Link>
           <Link href="/resources">Resources</Link>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/trust">Trust</Link>
           <Link href="/login">Login</Link>
           <InstallAppButton className="btn install-nav-button" label="Download app" />
           <Link className="btn gold" href="/signup">Start trial</Link>
