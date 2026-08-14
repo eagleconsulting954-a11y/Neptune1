@@ -66,8 +66,6 @@ const FLEETOPS_MODULES: ModuleKey[] = [
   "vessels",
   "maintenance",
   "incidents",
-  "crm",
-  "analytics",
   "activity",
   "billing",
   "settings"
@@ -89,7 +87,6 @@ const FLEETOPS_RESOURCES: ResourceKey[] = [
   "vessels",
   "work_orders",
   "incidents",
-  "crm_accounts",
   "activity_events",
   "subscriptions"
 ];
@@ -120,12 +117,12 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       "Hot-work and inspection delegation",
       "Certificate tracking",
       "Operational activity log",
-      "Mobile command interface"
+      "Verified identity and security center",
+      "Installable offline command interface"
     ],
     excluded: [
       "Fleet maintenance and work orders",
-      "Commercial CRM and pipeline analytics",
-      "Fleet administrator analytics",
+      "Fleet incident management",
       "Multi-vessel fleet management",
       "Future EV vessel development workspace",
       "No Other Master seafarer safety, insurance, and welfare workspace"
@@ -141,17 +138,18 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     priceLabel: "$1,499",
     stripePriceEnv: "STRIPE_PRICE_FLEETOPS",
     note: "Shore-side fleet operations",
-    description: "For fleet managers and operating teams managing vessels, maintenance, incidents, commercial accounts, and fleet analytics.",
+    description: "For fleet managers and operating teams managing vessels, maintenance, incidents, users, vessel permissions, and accountable operational activity.",
     modules: FLEETOPS_MODULES,
     resources: FLEETOPS_RESOURCES,
     features: [
       "Multi-vessel fleet registry",
       "Maintenance and work orders",
       "Incident and corrective-action records",
-      "Commercial CRM and opportunity pipeline",
-      "Fleet administrator analytics",
-      "Operational activity and audit stream",
-      "Up to 5 administrators",
+      "Organization users and role controls",
+      "Vessel-scoped access permissions",
+      "Immutable operational audit evidence",
+      "Managed vessel device visibility",
+      "Up to 5 organization administrators",
       "Mobile fleet operations interface"
     ],
     excluded: [
@@ -173,7 +171,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     priceLabel: "$1,998",
     stripePriceEnv: "STRIPE_PRICE_FULL_VESSEL_ACCESS",
     note: "Captain + FleetOps combined",
-    description: "The complete Neptune vessel and fleet operating suite, combining every Captain and FleetOps module under one subscription.",
+    description: "The complete Neptune vessel and fleet operating suite, combining every Captain and FleetOps operating module under one subscription.",
     modules: FULL_MODULES,
     resources: FULL_RESOURCES,
     features: [
@@ -182,11 +180,12 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       "Complete vessel and shore-team workflow",
       "Maritime weather, ocean, port, bunker, and MRCC intelligence",
       "Delegation, certificates, maintenance, and incidents",
-      "Commercial CRM and fleet analytics",
+      "Verified identity, MFA, sessions, roles, and vessel permissions",
+      "Immutable audit evidence and managed offline devices",
       "Future EV Vessel Projects 2026–2035 workspace",
       "No Other Master seafarer safety, insurance, and welfare workspace",
       "Multi-vessel command visibility",
-      "Up to 5 administrators",
+      "Up to 5 organization administrators",
       "Single combined Stripe subscription"
     ],
     excluded: [],
@@ -201,15 +200,17 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     priceLabel: "Custom",
     stripePriceEnv: "STRIPE_PRICE_ENTERPRISE",
     note: "Multi-fleet deployment",
-    description: "For larger organizations requiring custom roles, data migration, integrations, and multi-fleet implementation support.",
+    description: "For larger organizations requiring custom roles, vessel access policy, managed offline devices, data migration, integrations, and multi-fleet implementation support.",
     modules: FULL_MODULES,
     resources: FULL_RESOURCES,
     features: [
-      "All Full Vessel Access modules",
+      "All Full Vessel Access operating modules",
       "Future EV Vessel Projects 2026–2035 workspace",
       "No Other Master seafarer safety, insurance, and welfare workspace",
-      "Unlimited organizations",
-      "Custom user roles and permissions",
+      "Custom multi-fleet implementation",
+      "Organization roles and vessel-level permissions",
+      "Managed offline vessel device controls",
+      "Immutable audit evidence",
       "Data migration and onboarding",
       "Priority support",
       "Custom API and provider integrations"
