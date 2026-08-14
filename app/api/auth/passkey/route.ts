@@ -11,12 +11,19 @@ function appUrl(request: Request) {
   return process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 }
 
+function safeRedirect(value: unknown) {
+  const path = String(value || "/dashboard");
+  return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
+}
+
 export async function POST(request: Request) {
   const ip = requestIp(request);
+  let attemptedEmail = "";
   try {
     const body = await request.json().catch(() => ({}));
     const action = String(body.action || "options");
     const email = String(body.email || "").trim().toLowerCase();
+    attemptedEmail = email;
     if (!email || !email.includes("@")) return NextResponse.json({ error: "Enter your account email." }, { status: 400 });
     await assertLoginAllowed(email, ip);
 
@@ -52,9 +59,10 @@ export async function POST(request: Request) {
       });
       const entitlement = await getEntitlement(user.org_id);
       await setAccessCookie(entitlement);
-      const redirect = isDesignatedAdminEmail(user.email) && String(body.from || "").startsWith("/platform-admin")
+      const requested = safeRedirect(body.from);
+      const redirect = isDesignatedAdminEmail(user.email) && requested.startsWith("/platform-admin")
         ? "/platform-admin"
-        : entitlement.allowed ? String(body.from || "/dashboard") : "/trial-expired";
+        : entitlement.allowed ? requested : "/trial-expired";
       return NextResponse.json({ ok: true, redirect });
     }
 
@@ -63,11 +71,9 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "UNKNOWN";
     if (message === "LOGIN_RATE_LIMITED") return NextResponse.json({ error: "Too many sign-in attempts. Try again later.", code: "LOGIN_RATE_LIMITED" }, { status: 429 });
     if (["PASSKEY_AUTH_FAILED", "PASSKEY_CHALLENGE_EXPIRED"].includes(message)) {
-      try {
-        const body = await request.clone().json().catch(() => ({}));
-        const email = String(body.email || "").trim().toLowerCase();
-        if (email) await noteLoginFailure(email, ip);
-      } catch {}
+      if (attemptedEmail) {
+        try { await noteLoginFailure(attemptedEmail, ip); } catch {}
+      }
       return NextResponse.json({ error: "Passkey verification failed or expired.", code: message }, { status: 401 });
     }
     console.error(error);
