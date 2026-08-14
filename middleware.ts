@@ -11,7 +11,7 @@ function accessIsValid(value?: string) {
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const tenantRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
+  const tenantRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/security-center");
   const platformRoute = pathname.startsWith("/platform-admin");
   if (!tenantRoute && !platformRoute) return NextResponse.next();
 
@@ -34,4 +34,4 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/dashboard/:path*", "/admin/:path*", "/platform-admin/:path*"] };
+export const config = { matcher: ["/dashboard/:path*", "/admin/:path*", "/platform-admin/:path*", "/security-center/:path*"] };
