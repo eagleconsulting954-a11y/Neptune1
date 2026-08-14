@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { runMigrations } from "@/src/lib/server/migrations";
 
 export type ResourceName =
   | "vessels"
@@ -17,14 +18,39 @@ export type ResourceName =
 export type Row = Record<string, any>;
 
 let pool: Pool | null = null;
+let schemaReady: Promise<{ ok: boolean; mode: string }> | null = null;
+
+function normalizedConnectionString() {
+  const raw = process.env.DATABASE_URL;
+  if (!raw || process.env.NODE_ENV !== "production") return raw;
+  try {
+    const url = new URL(raw);
+    for (const key of ["sslmode", "ssl", "sslcert", "sslkey", "sslrootcert"]) url.searchParams.delete(key);
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
+function productionSsl() {
+  if (process.env.NODE_ENV !== "production") return undefined;
+  if (String(process.env.PG_SSL_MODE || "verify-full").toLowerCase() === "disable") return false;
+  const ca = process.env.PG_SSL_CA_BASE64 ? Buffer.from(process.env.PG_SSL_CA_BASE64, "base64").toString("utf8") : undefined;
+  return {
+    rejectUnauthorized: process.env.PG_SSL_REJECT_UNAUTHORIZED !== "false",
+    ...(ca ? { ca } : {})
+  };
+}
 
 function database() {
   if (!process.env.DATABASE_URL) return null;
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
-      max: 8
+      connectionString: normalizedConnectionString(),
+      ssl: productionSsl(),
+      max: 8,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000
     });
   }
   return pool;
@@ -68,193 +94,205 @@ const resourceConfig: Record<ResourceName, { prefix: string; fields: string[] }>
 export async function ensureSchema() {
   const db = database();
   if (!db) return { ok: false, mode: "unconfigured" };
+  if (schemaReady) return schemaReady;
 
-  await db.query(`
-    create table if not exists organizations (
-      id text primary key,
-      name text not null,
-      plan text not null default 'trial',
-      status text not null default 'trial',
-      created_at timestamptz not null default now()
-    );
-    create table if not exists users (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      name text not null,
-      email text unique not null,
-      password_hash text not null,
-      role text not null default 'member',
-      created_at timestamptz not null default now()
-    );
-    create table if not exists vessels (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      name text not null,
-      vessel_type text,
-      imo text,
-      status text,
-      readiness int default 0,
-      eta text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists duties (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      vessel_id text references vessels(id) on delete set null,
-      category text not null,
-      title text not null,
-      owner text,
-      location text,
-      status text not null default 'Open',
-      severity text not null default 'normal',
-      due_at text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists work_orders (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      vessel_id text references vessels(id) on delete set null,
-      title text not null,
-      owner text,
-      status text,
-      priority text,
-      due_at text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists certificates (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      vessel_id text references vessels(id) on delete set null,
-      name text not null,
-      issuer text,
-      expires_at text,
-      status text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists incidents (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      vessel_id text references vessels(id) on delete set null,
-      title text not null,
-      severity text,
-      status text,
-      owner text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists crm_accounts (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      company text not null,
-      contact text,
-      email text,
-      stage text,
-      annual_value numeric default 0,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists activity_events (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      label text not null,
-      body text,
-      actor text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists subscriptions (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      stripe_customer_id text,
-      stripe_subscription_id text,
-      plan text not null default 'fleetops',
-      status text not null default 'inactive',
-      current_period_end text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists ports (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      name text not null,
-      unlocode text,
-      country text,
-      latitude double precision,
-      longitude double precision,
-      timezone text,
-      terminal text,
-      max_draft_m numeric,
-      anchorage_notes text,
-      bunkering_available boolean not null default false,
-      provider_port_id text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists bunker_plans (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      vessel_id text references vessels(id) on delete set null,
-      departure_port text,
-      destination_port text,
-      bunker_port text,
-      distance_nm numeric,
-      speed_kn numeric,
-      daily_consumption_mt numeric,
-      current_rob_mt numeric,
-      reserve_percent numeric,
-      fuel_type text,
-      quantity_required_mt numeric,
-      price_per_mt numeric,
-      estimated_cost numeric,
-      supplier text,
-      eta text,
-      status text not null default 'Draft',
-      notes text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists mrcc_contacts (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      name text not null,
-      country text,
-      region text,
-      phone text,
-      email text,
-      vhf_channel text,
-      mmsi text,
-      latitude double precision,
-      longitude double precision,
-      source_url text,
-      verified_at text,
-      notes text,
-      created_at timestamptz not null default now()
-    );
-    create table if not exists port_congestion_snapshots (
-      id text primary key,
-      org_id text not null references organizations(id) on delete cascade,
-      port_id text references ports(id) on delete cascade,
-      provider text,
-      vessels_in_port int,
-      vessels_waiting int,
-      avg_wait_hours numeric,
-      congestion_level text,
-      observed_at timestamptz not null default now(),
-      raw_json jsonb,
-      created_at timestamptz not null default now()
-    );
-    create index if not exists idx_ports_org_unlocode on ports(org_id, unlocode);
-    create index if not exists idx_bunker_plans_org_created on bunker_plans(org_id, created_at desc);
-    create index if not exists idx_mrcc_org_region on mrcc_contacts(org_id, region);
-    create index if not exists idx_congestion_port_observed on port_congestion_snapshots(port_id, observed_at desc);
-  `);
+  schemaReady = (async () => {
+    await db.query(`
+      create table if not exists organizations (
+        id text primary key,
+        name text not null,
+        plan text not null default 'trial',
+        status text not null default 'trial',
+        created_at timestamptz not null default now()
+      );
+      create table if not exists users (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        name text not null,
+        email text unique not null,
+        password_hash text not null,
+        role text not null default 'member',
+        created_at timestamptz not null default now()
+      );
+      create table if not exists vessels (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        name text not null,
+        vessel_type text,
+        imo text,
+        status text,
+        readiness int default 0,
+        eta text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists duties (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        vessel_id text references vessels(id) on delete set null,
+        category text not null,
+        title text not null,
+        owner text,
+        location text,
+        status text not null default 'Open',
+        severity text not null default 'normal',
+        due_at text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists work_orders (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        vessel_id text references vessels(id) on delete set null,
+        title text not null,
+        owner text,
+        status text,
+        priority text,
+        due_at text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists certificates (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        vessel_id text references vessels(id) on delete set null,
+        name text not null,
+        issuer text,
+        expires_at text,
+        status text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists incidents (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        vessel_id text references vessels(id) on delete set null,
+        title text not null,
+        severity text,
+        status text,
+        owner text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists crm_accounts (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        company text not null,
+        contact text,
+        email text,
+        stage text,
+        annual_value numeric default 0,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists activity_events (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        label text not null,
+        body text,
+        actor text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists subscriptions (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        stripe_customer_id text,
+        stripe_subscription_id text,
+        plan text not null default 'fleetops',
+        status text not null default 'inactive',
+        current_period_end text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists ports (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        name text not null,
+        unlocode text,
+        country text,
+        latitude double precision,
+        longitude double precision,
+        timezone text,
+        terminal text,
+        max_draft_m numeric,
+        anchorage_notes text,
+        bunkering_available boolean not null default false,
+        provider_port_id text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists bunker_plans (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        vessel_id text references vessels(id) on delete set null,
+        departure_port text,
+        destination_port text,
+        bunker_port text,
+        distance_nm numeric,
+        speed_kn numeric,
+        daily_consumption_mt numeric,
+        current_rob_mt numeric,
+        reserve_percent numeric,
+        fuel_type text,
+        quantity_required_mt numeric,
+        price_per_mt numeric,
+        estimated_cost numeric,
+        supplier text,
+        eta text,
+        status text not null default 'Draft',
+        notes text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists mrcc_contacts (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        name text not null,
+        country text,
+        region text,
+        phone text,
+        email text,
+        vhf_channel text,
+        mmsi text,
+        latitude double precision,
+        longitude double precision,
+        source_url text,
+        verified_at text,
+        notes text,
+        created_at timestamptz not null default now()
+      );
+      create table if not exists port_congestion_snapshots (
+        id text primary key,
+        org_id text not null references organizations(id) on delete cascade,
+        port_id text references ports(id) on delete cascade,
+        provider text,
+        vessels_in_port int,
+        vessels_waiting int,
+        avg_wait_hours numeric,
+        congestion_level text,
+        observed_at timestamptz not null default now(),
+        raw_json jsonb,
+        created_at timestamptz not null default now()
+      );
+      create index if not exists idx_ports_org_unlocode on ports(org_id, unlocode);
+      create index if not exists idx_bunker_plans_org_created on bunker_plans(org_id, created_at desc);
+      create index if not exists idx_mrcc_org_region on mrcc_contacts(org_id, region);
+      create index if not exists idx_congestion_port_observed on port_congestion_snapshots(port_id, observed_at desc);
+    `);
 
-  await db.query(`
-    delete from activity_events where id in ('evt_001','evt_002');
-    delete from crm_accounts where id in ('crm_001','crm_002') or email like '%.example';
-    delete from incidents where id='inc_001';
-    delete from certificates where id='cert_001';
-    delete from work_orders where id='wo_001';
-    delete from duties where id in ('dty_001','dty_002','dty_003');
-    delete from vessels where id in ('vsl_001','vsl_002','vsl_003');
-    delete from subscriptions where id='sub_demo';
-  `);
+    await runMigrations(db);
 
-  return { ok: true, mode: "postgres" };
+    await db.query(`
+      delete from activity_events where id in ('evt_001','evt_002');
+      delete from crm_accounts where id in ('crm_001','crm_002') or email like '%.example';
+      delete from incidents where id='inc_001';
+      delete from certificates where id='cert_001';
+      delete from work_orders where id='wo_001';
+      delete from duties where id in ('dty_001','dty_002','dty_003');
+      delete from vessels where id in ('vsl_001','vsl_002','vsl_003');
+      delete from subscriptions where id='sub_demo';
+    `);
+
+    return { ok: true, mode: "postgres" };
+  })();
+
+  try {
+    return await schemaReady;
+  } catch (error) {
+    schemaReady = null;
+    throw error;
+  }
 }
 
 export async function sql<T extends Row = Row>(text: string, params: any[] = []): Promise<T[]> {
