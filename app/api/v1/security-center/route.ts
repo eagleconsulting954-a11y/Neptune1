@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { requireSession } from "@/src/lib/server/auth";
-import { findUserByEmail } from "@/src/lib/server/db";
+import { findUserByEmail, listResource } from "@/src/lib/server/db";
 import {
   beginMfaSetup,
   completeMfaSetup,
@@ -37,7 +37,7 @@ function errorResponse(error: unknown) {
   if (message === "CANNOT_DEACTIVATE_SELF") return NextResponse.json({ error: "You cannot deactivate your own active session identity." }, { status: 400 });
   if (message === "USER_ALREADY_IN_ORG") return NextResponse.json({ error: "That user already belongs to this organization." }, { status: 409 });
   if (message === "EMAIL_ALREADY_REGISTERED") return NextResponse.json({ error: "That email is already registered to Neptune." }, { status: 409 });
-  if (message === "INVALID_EMAIL" || message === "INVALID_ROLE" || message === "INVALID_VESSEL_PERMISSION" || message === "ORGANIZATION_NAME_REQUIRED") return NextResponse.json({ error: message.replaceAll("_", " ").toLowerCase() }, { status: 400 });
+  if (message === "INVALID_EMAIL" || message === "INVALID_ROLE" || message === "INVALID_VESSEL_PERMISSION" || message === "ORGANIZATION_NAME_REQUIRED" || message === "INVALID_DEVICE_ACTION") return NextResponse.json({ error: message.replaceAll("_", " ").toLowerCase() }, { status: 400 });
   if (message === "USER_NOT_FOUND" || message === "DEVICE_NOT_FOUND") return NextResponse.json({ error: "Record not found." }, { status: 404 });
   if (message.startsWith("EMAIL_")) return NextResponse.json({ error: "Secure email delivery is not configured or failed." }, { status: 503 });
   console.error(error);
@@ -54,14 +54,15 @@ export async function GET() {
       getOrganizationProfile(session.orgId)
     ]);
 
-    const [users, invitations, devices, audit] = managerAccess
+    const [users, invitations, devices, audit, vessels] = managerAccess
       ? await Promise.all([
           listOrganizationUsers(session.orgId),
           listOrganizationInvitations(session.orgId),
           listManagedDevices(session.orgId),
-          getOrganizationAudit(session.orgId)
+          getOrganizationAudit(session.orgId),
+          listResource("vessels", session.orgId)
         ])
-      : [[], [], [], []];
+      : [[], [], [], [], []];
 
     return NextResponse.json({
       managerAccess,
@@ -72,7 +73,8 @@ export async function GET() {
       users,
       invitations,
       devices,
-      audit
+      audit,
+      vessels
     });
   } catch (error) {
     return errorResponse(error);
@@ -171,10 +173,12 @@ export async function POST(request: Request) {
     }
 
     if (action === "device_action") {
+      const deviceAction = String(body.deviceAction || "");
+      if (!["revoke", "restore", "wipe", "clear_wipe"].includes(deviceAction)) throw new Error("INVALID_DEVICE_ACTION");
       const device = await manageDevice({
         session,
         deviceId: String(body.deviceId || ""),
-        action: String(body.deviceAction || "") as "revoke" | "restore" | "wipe" | "clear_wipe",
+        action: deviceAction as "revoke" | "restore" | "wipe" | "clear_wipe",
         request
       });
       return NextResponse.json({ device });
