@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { sql, type Row } from "@/src/lib/server/db";
 import { canAccessModule } from "@/src/lib/plans";
+import { assertOrganizationManager } from "@/src/lib/server/org-access";
+import { recordAuditEvent } from "@/src/lib/server/security";
 
 const DEFAULT_OWNERS = [
   "Master",
@@ -82,6 +84,7 @@ function accessError(error: unknown) {
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (message === "TRIAL_EXPIRED") return NextResponse.json({ error: "Your 14-day trial has ended.", code: "TRIAL_EXPIRED" }, { status: 402 });
   if (message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "An active Neptune subscription is required.", code: "SUBSCRIPTION_REQUIRED" }, { status: 402 });
+  if (message === "ORG_MANAGER_REQUIRED") return NextResponse.json({ error: "Organization manager access is required to change shared duty setup." }, { status: 403 });
   console.error(error);
   return NextResponse.json({ error: "Unable to load duty setup." }, { status: 500 });
 }
@@ -104,6 +107,7 @@ export async function PUT(request: Request) {
     if (!canAccessModule(session.entitlement.plan, "delegation")) {
       return NextResponse.json({ error: "Delegation is not included in this package.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
     }
+    assertOrganizationManager(session);
 
     const body = await request.json().catch(() => ({}));
     const owners = unique(Array.isArray(body.owners) ? body.owners : []);
@@ -121,6 +125,7 @@ export async function PUT(request: Request) {
         locations=excluded.locations,
         updated_at=now()
     `, [session.orgId, JSON.stringify(owners), JSON.stringify(locations)]);
+    await recordAuditEvent({ session, action: "organization.duty_setup_updated", entityType: "organization_duty_settings", entityId: session.orgId, route: "/api/v1/settings/duty-options", method: "PUT", request, metadata: { ownerCount: owners.length, locationCount: locations.length } });
 
     return NextResponse.json({ ok: true, ...(await readDutyOptions(session.orgId)) });
   } catch (error) {
