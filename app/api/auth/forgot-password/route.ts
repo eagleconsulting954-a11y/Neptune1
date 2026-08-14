@@ -2,19 +2,9 @@ import { NextResponse } from "next/server";
 import { createPasswordResetRequest, sendPasswordResetEmail } from "@/src/lib/server/password-reset";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
 import { migrateFrancisOwnerAccount } from "@/src/lib/server/owner-migration";
+import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 const GENERIC_MESSAGE = "If an account exists for that email, a secure reset link has been sent.";
-
-function platformOwner(user: Record<string, any>) {
-  const configured = [process.env.PLATFORM_ADMIN_EMAILS, process.env.NEPTUNE_OWNER_EMAIL]
-    .filter(Boolean)
-    .join(",")
-    .split(",")
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean);
-  return ["owner", "platform_admin", "super_admin"].includes(String(user.role || "").toLowerCase())
-    || configured.includes(String(user.email || "").toLowerCase());
-}
 
 export async function POST(request: Request) {
   let email = "";
@@ -40,7 +30,7 @@ export async function POST(request: Request) {
         to: reset.user.email,
         name: reset.user.name,
         resetUrl: reset.resetUrl,
-        ownerRecovery: platformOwner(reset.user)
+        ownerRecovery: isDesignatedAdminEmail(reset.user.email)
       });
     }
 
