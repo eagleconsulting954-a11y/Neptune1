@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [plan, setPlan] = useState("captain");
 
   useEffect(() => {
@@ -18,17 +21,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    setVerificationEmail("");
     const form = new FormData(event.currentTarget);
     const payload: Record<string, FormDataEntryValue | string> = Object.fromEntries(form.entries());
-    if (mode === "login") payload.from = new URLSearchParams(window.location.search).get("from") || "/dashboard";
+    if (mode === "login") {
+      payload.from = new URLSearchParams(window.location.search).get("from") || "/dashboard";
+      payload.deviceLabel = typeof navigator !== "undefined" ? navigator.platform || "Neptune device" : "Neptune device";
+    }
     const res = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok) {
+      if (data.code === "MFA_REQUIRED" || data.mfaRequired) setMfaRequired(true);
+      if (data.code === "EMAIL_VERIFICATION_REQUIRED" && data.email) setVerificationEmail(String(data.email));
       setMessage(data.error || "Unable to continue");
       setLoading(false);
       return;
     }
-    window.location.href = data.redirect || (mode === "signup" ? "/dashboard" : "/dashboard");
+    window.location.href = data.redirect || "/dashboard";
   }
 
   return (
@@ -39,10 +48,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <label>Your name<input name="name" required placeholder="Captain, fleet manager, or administrator" /></label>
       </>}
       <label>Email<input name="email" type="email" required autoComplete="email" placeholder="you@company.com" /></label>
-      <label>Password<input name="password" type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="Minimum 8 characters" /></label>
-      <button className="btn gold" disabled={loading}>{loading ? "Please wait..." : mode === "login" ? "Enter Neptune" : "Start 14-day trial"}</button>
-      {mode === "signup" && <p className="muted" style={{ margin: 0, fontSize: 11 }}>Your trial follows the package selected above. Full-suite access is available only with Full Vessel Access or Enterprise.</p>}
-      {message && <div className="form-message error">{message}</div>}
+      <label>Password<input name="password" type="password" required minLength={mode === "signup" ? 12 : 8} autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder={mode === "signup" ? "Minimum 12 characters" : "Your password"} /></label>
+      {mode === "login" && mfaRequired && <label>Authenticator or recovery code<input name="mfaCode" required autoComplete="one-time-code" inputMode="numeric" placeholder="6-digit code or recovery code" /></label>}
+      <button className="btn gold" disabled={loading}>{loading ? "Please wait..." : mode === "login" ? mfaRequired ? "Verify and enter Neptune" : "Enter Neptune" : "Create account and verify email"}</button>
+      {mode === "signup" && <p className="muted" style={{ margin: 0, fontSize: 11 }}>New organizations must verify the account email before signing in. Your trial follows the package selected above.</p>}
+      {message && <div className="form-message error">{message}{verificationEmail && <> <Link href={`/verify-email?email=${encodeURIComponent(verificationEmail)}`}>Resend verification</Link></>}</div>}
     </form>
   );
 }
