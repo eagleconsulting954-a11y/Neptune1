@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createOrganizationAndAdmin, findUserByEmail } from "@/src/lib/server/db";
 import { setAccessCookie, setSession } from "@/src/lib/server/auth";
-import { startTrial } from "@/src/lib/server/trial";
+import { getEntitlement } from "@/src/lib/server/trial";
 import { normalizePlan } from "@/src/lib/plans";
 import { recordSystemError } from "@/src/lib/server/platform-admin";
+import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 export async function POST(request: Request) {
   let email = "";
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
 
     if (!organization || !name || !email || password.length < 8) {
       return NextResponse.json({ error: "Complete all fields and use at least 8 password characters." }, { status: 400 });
+    }
+    if (isDesignatedAdminEmail(email)) {
+      return NextResponse.json({ error: "This Neptune administrator identity is reserved and must be provisioned internally." }, { status: 403 });
     }
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Account registration is temporarily unavailable because the production database is not connected." }, { status: 503 });
