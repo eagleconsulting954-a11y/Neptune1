@@ -18,6 +18,11 @@ assert("admin list immutable", !adminAccess.includes("process.env.NEPTUNE_OWNER_
 const siteHeader = read("components/SiteHeader.tsx");
 assert("no public admin nav", !siteHeader.includes('href="/admin"') && !siteHeader.includes('href="/platform-admin"'), "public navigation exposes an admin link");
 assert("no public CRM branding", !siteHeader.includes("Vessel Command CRM"), "public brand still advertises CRM");
+assert("trust center navigation", siteHeader.includes('href="/trust"'), "public trust center is not discoverable");
+
+const homepage = read("app/page.tsx");
+assert("no customer CRM module", !homepage.includes("CRM & Analytics") && !homepage.includes("CRM accounts"), "customer website still sells CRM as a module");
+assert("security product positioning", homepage.includes("passkeys") && homepage.includes("vessel permissions"), "enterprise identity/access controls are missing from customer positioning");
 
 const resourceApi = read("app/api/v1/[resource]/route.ts");
 assert("CRM identity enforcement", resourceApi.includes('resource === "crm_accounts"') && resourceApi.includes("isDesignatedAdminEmail"), "CRM API lacks designated-admin enforcement");
@@ -69,6 +74,17 @@ assert("invitation edit permission", orgAccess.includes("can_edit_vessels") && o
 assert("user deactivation", orgAccess.includes("revokeAllAuthSessions") && orgAccess.includes("is_active"), "user deactivation does not revoke sessions");
 assert("device revocation", orgAccess.includes("wipe_requested_at") && orgAccess.includes("revoked_at"), "managed device revoke/wipe controls missing");
 
+const emergencyEvents = read("app/api/v1/emergency-events/route.ts");
+const emergencyPositions = read("app/api/v1/emergency-positions/route.ts");
+const emergencyBatch = read("app/api/v1/emergency-positions/batch/route.ts");
+assert("emergency event vessel RBAC", emergencyEvents.includes("allowedVesselIds") && emergencyEvents.includes("VESSEL_PERMISSION_REQUIRED"), "emergency events are not vessel-scoped");
+assert("emergency trail vessel RBAC", emergencyPositions.includes("allowedVesselIds") && emergencyPositions.includes("VESSEL_PERMISSION_REQUIRED"), "emergency trails are not vessel-scoped");
+assert("emergency sync edit RBAC", emergencyBatch.includes("allowedVesselIds(session, true)"), "offline emergency synchronization ignores vessel edit permissions");
+
+const dutyOptions = read("app/api/v1/settings/duty-options/route.ts");
+assert("shared duty setup manager-only", dutyOptions.includes("assertOrganizationManager(session)"), "organization-wide duty setup can be changed by a non-manager");
+assert("duty setup audit", dutyOptions.includes("organization.duty_setup_updated"), "shared duty setup changes are not audited");
+
 const nextConfig = read("next.config.mjs");
 for (const header of ["Content-Security-Policy", "Strict-Transport-Security", "Permissions-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"]) {
   assert(`security header ${header}`, nextConfig.includes(header), `${header} is missing`);
@@ -78,6 +94,10 @@ const workflow = read(".github/workflows/build.yml");
 assert("Node 22 CI", workflow.includes("node-version: 22"), "CI must use a supported Node release");
 assert("HTTP integration gate", workflow.includes("npm run test:http"), "production HTTP integration tests are not part of CI");
 assert("dependency audit gate", workflow.includes("npm run audit:high"), "high-severity dependency audit is not part of CI");
+
+const httpSmoke = read("scripts/http-smoke.mjs");
+assert("production HTTP auth tests", httpSmoke.includes("bootstrap rejects anonymous") && httpSmoke.includes("CRM API rejects anonymous"), "HTTP integration suite lacks protected-route checks");
+assert("production HTTP security headers", httpSmoke.includes("CSP header") && httpSmoke.includes("HSTS"), "HTTP integration suite lacks security-header checks");
 
 const packageJson = JSON.parse(read("package.json"));
 assert("secure Next.js line", packageJson.dependencies.next === "16.3.1", "Next.js is not pinned to the audited secure release");
