@@ -136,6 +136,25 @@ const migrations = [
       create index if not exists idx_users_email_verified on users(lower(email),email_verified_at);
       create index if not exists idx_auth_sessions_expiry on auth_sessions(expires_at,revoked_at);
     `
+  },
+  {
+    id: "20260813_003_immutable_audit",
+    sql: `
+      create or replace function neptune_prevent_audit_mutation() returns trigger as $$
+      begin
+        raise exception 'audit_events are append-only';
+      end;
+      $$ language plpgsql;
+
+      do $$
+      begin
+        if not exists (select 1 from pg_trigger where tgname='trg_neptune_audit_immutable') then
+          create trigger trg_neptune_audit_immutable
+          before update or delete on audit_events
+          for each row execute function neptune_prevent_audit_mutation();
+        end if;
+      end $$;
+    `
   }
 ] as const;
 
