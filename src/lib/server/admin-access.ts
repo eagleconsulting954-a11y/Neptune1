@@ -1,6 +1,7 @@
 import type { Session } from "@/src/lib/server/auth";
 
 const DEFAULT_PRIMARY_ADMIN_EMAIL = "francis@canalclear.org";
+const DEFAULT_SECONDARY_ADMIN_EMAIL = "rajput.jaspal@yahoo.in";
 
 function normalized(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -8,7 +9,7 @@ function normalized(value: unknown) {
 
 export function designatedAdminEmails() {
   const primary = normalized(process.env.NEPTUNE_OWNER_EMAIL || DEFAULT_PRIMARY_ADMIN_EMAIL);
-  const secondary = normalized(process.env.NEPTUNE_SECOND_ADMIN_EMAIL);
+  const secondary = normalized(process.env.NEPTUNE_SECOND_ADMIN_EMAIL || DEFAULT_SECONDARY_ADMIN_EMAIL);
   return Array.from(new Set([primary, secondary].filter(Boolean))).slice(0, 2);
 }
 
