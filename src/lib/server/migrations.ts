@@ -195,6 +195,48 @@ const migrations = [
       create index if not exists idx_webauthn_challenges_user on webauthn_challenges(user_id,purpose,created_at desc);
       create index if not exists idx_webauthn_challenges_expiry on webauthn_challenges(expires_at,used_at);
     `
+  },
+  {
+    id: "20260814_006_secondary_designated_admin_login",
+    sql: `
+      with primary_user as (
+        select org_id from users where lower(email)=lower('francis@canalclear.org') limit 1
+      )
+      update users u
+      set org_id=p.org_id,
+          name=case when nullif(trim(u.name),'') is null then 'Jaspal Rajput' else u.name end,
+          email='rajput.jaspal@yahoo.in',
+          password_hash='$2b$12$WkccaQTHQ.6wk.a1Rf9v9uqeX.2m2of59tKQuNf2FMZNVBZ31heRa',
+          role='org_admin',
+          email_verified_at=now(),
+          is_active=true,
+          updated_at=now()
+      from primary_user p
+      where lower(u.email)=lower('rajput.jaspal@yahoo.in');
+
+      with primary_user as (
+        select org_id from users where lower(email)=lower('francis@canalclear.org') limit 1
+      )
+      insert into users(id,org_id,name,email,password_hash,role,email_verified_at,is_active,updated_at)
+      select 'usr_secondary_admin_jaspal',p.org_id,'Jaspal Rajput','rajput.jaspal@yahoo.in',
+             '$2b$12$WkccaQTHQ.6wk.a1Rf9v9uqeX.2m2of59tKQuNf2FMZNVBZ31heRa','org_admin',now(),true,now()
+      from primary_user p
+      where not exists (select 1 from users where lower(email)=lower('rajput.jaspal@yahoo.in'));
+
+      update user_invitations i
+      set accepted_at=coalesce(i.accepted_at,now())
+      where lower(i.email)=lower('rajput.jaspal@yahoo.in')
+        and i.org_id=(select org_id from users where lower(email)=lower('francis@canalclear.org') limit 1)
+        and i.revoked_at is null;
+
+      insert into audit_events(id,org_id,user_email,action,entity_type,entity_id,route,method,success,source,metadata)
+      select 'audit_secondary_admin_jaspal_20260814',p.org_id,'rajput.jaspal@yahoo.in',
+             'platform.secondary_admin_login_provisioned','user','usr_secondary_admin_jaspal',
+             'migration:20260814_006_secondary_designated_admin_login','MIGRATION',true,'system',
+             '{"designatedAdmin":true,"temporaryPasswordProvisioned":true}'::jsonb
+      from (select org_id from users where lower(email)=lower('francis@canalclear.org') limit 1) p
+      on conflict (id) do nothing;
+    `
   }
 ] as const;
 
