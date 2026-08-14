@@ -2,15 +2,23 @@
   "name": "neptune1",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:security",
+    "test:security": "node scripts/security-smoke.mjs",
+    "audit:high": "npm audit --audit-level=high",
+    "ci": "npm run typecheck && npm run test:security && npm run build && npm run audit:high"
   },
   "dependencies": {
-    "next": "^15.5.20",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "next": "15.5.23",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "pg": "^8.13.1",
     "stripe": "^17.5.0",
     "bcryptjs": "^2.4.3"
