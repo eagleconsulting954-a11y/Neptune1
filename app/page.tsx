@@ -18,9 +18,9 @@ const desiredOutcomes = [
 ];
 
 const process = [
-  ["01", "Your team enters real records", "Vessels, duties, maintenance, certificates, incidents, CRM accounts, ports, and voyage plans stay inside the organization workspace."],
+  ["01", "Your team enters real records", "Vessels, duties, maintenance, certificates, incidents, emergency records, ports, and voyage plans stay inside the organization workspace."],
   ["02", "Neptune checks the included modules", "The platform reads only the records and tools available in the selected Captain, FleetOps, Full Vessel Access, or Enterprise package."],
-  ["03", "Operational signals are calculated", "Readiness, open work, compliance windows, incidents, port intelligence, and commercial activity are evaluated from current data."],
+  ["03", "Operational signals are calculated", "Readiness, open work, compliance windows, incidents, port intelligence, safety, and fleet activity are evaluated from current data."],
   ["04", "The most important issues rise first", "Critical alerts and next-best recommendations are ranked so the team can act instead of searching."],
   ["05", "Ownership and evidence stay attached", "The responsible person, status, deadline, and activity history remain connected to the record."]
 ];
@@ -33,7 +33,7 @@ const operatingModules = [
   ["Maintenance", "Track work orders, priority, engineering ownership, and due dates."],
   ["Certificates", "See expiry windows and keep certificate evidence connected to the vessel."],
   ["Incidents", "Record severity, ownership, status, root-cause work, and corrective actions."],
-  ["CRM & Analytics", "Manage accounts, pipeline, fleet activity, and shore-side operating insight."]
+  ["Identity & Security", "Control verified users, passkeys, MFA, vessel permissions, managed devices, and immutable audit evidence."]
 ];
 
 const faq = [
@@ -41,8 +41,9 @@ const faq = [
   ["Will Neptune add sample information to my workspace?", "No. New workspaces start empty. Dashboard totals, alerts, trends, and recommendations begin with information entered by your organization."],
   ["What happens after 14 days?", "The workspace is automatically paused. Your records stay stored, and access returns after an active subscription is confirmed."],
   ["Is Maritime Intelligence a navigation system?", "No. It supports planning and operational awareness. It does not replace official bridge systems, charts, GMDSS, VTS, NAVTEX, SafetyNET, ECDIS, or required maritime procedures."],
-  ["Can one subscription unlock both onboard and shore-side tools?", "Yes. Full Vessel Access combines the Captain and FleetOps packages into one subscription with the complete Neptune module set."],
-  ["Can Neptune be installed as an app?", "Yes. Customers can install Neptune directly from the website on supported phones, tablets, and computers. The installed app uses the same secure account and receives updates from the live platform."]
+  ["Can one subscription unlock both onboard and shore-side tools?", "Yes. Full Vessel Access combines the Captain and FleetOps packages into one subscription with the complete Neptune operating module set."],
+  ["Can Neptune be installed as an app?", "Yes. Customers can install Neptune directly from the website on supported phones, tablets, and computers. The installed app uses the same secure account and receives updates from the live platform."],
+  ["How is account access protected?", "New organizations require verified email ownership. Neptune also supports authenticator MFA, passkeys, revocable sessions, organization roles, vessel-level permissions, and managed device controls."]
 ];
 
 const packageOrder: PlanKey[] = ["captain", "fleetops", "full_vessel_access"];
@@ -67,8 +68,8 @@ export default function HomePage() {
               </div>
               <div className="psych-reassurance">
                 <span><b>Clean workspace</b>No sample records</span>
-                <span><b>Exact access</b>Only purchased modules</span>
-                <span><b>Automatic control</b>14-day cutoff</span>
+                <span><b>Exact access</b>Package + vessel permissions</span>
+                <span><b>Verified identity</b>Email, MFA & passkeys</span>
               </div>
             </div>
 
@@ -78,7 +79,7 @@ export default function HomePage() {
                 <span className="psych-live-pill"><i /> ORGANIZATION DATA</span>
               </div>
               <div className="psych-processing-list">
-                <div className="complete"><span>01</span><div><b>Read included records</b><small>Vessels, work, compliance, incidents, ports, and accounts</small></div><strong>✓</strong></div>
+                <div className="complete"><span>01</span><div><b>Read included records</b><small>Vessels, work, compliance, incidents, ports, and emergency records</small></div><strong>✓</strong></div>
                 <div className="complete"><span>02</span><div><b>Check operating conditions</b><small>Status, ownership, deadlines, severity, readiness, and evidence</small></div><strong>✓</strong></div>
                 <div className="active"><span>03</span><div><b>Rank risk and urgency</b><small>Critical issues move ahead of routine activity</small></div><strong>•••</strong></div>
                 <div><span>04</span><div><b>Build next-best actions</b><small>Recommendations stay connected to the responsible module</small></div><strong>→</strong></div>
@@ -94,10 +95,10 @@ export default function HomePage() {
         <section className="psych-signal-strip" aria-label="Neptune product assurances">
           <div className="container">
             <span>PostgreSQL organization isolation</span>
-            <span>Protected package APIs</span>
-            <span>Decision alerts from real records</span>
-            <span>Stripe subscription support</span>
-            <span>Installable vessel app</span>
+            <span>Vessel-level access controls</span>
+            <span>Verified identity + passkeys</span>
+            <span>Immutable audit evidence</span>
+            <span>Installable offline vessel app</span>
           </div>
         </section>
 
@@ -196,8 +197,8 @@ export default function HomePage() {
             </div>
             <div className="psych-proof-checks">
               <article><b>Real-data dashboard</b><span>No synthetic vessel records are inserted into customer workspaces.</span></article>
-              <article><b>Server-side package control</b><span>Hidden modules cannot be reached through protected APIs.</span></article>
-              <article><b>Visible trial status</b><span>Customers see package name and remaining trial time.</span></article>
+              <article><b>Server-side access control</b><span>Package, role, and vessel permissions are enforced by protected APIs.</span></article>
+              <article><b>Verified identity controls</b><span>Email verification, MFA, passkeys, and revocable sessions protect account access.</span></article>
               <article><b>Planning limits stated clearly</b><span>Maritime Intelligence is not represented as official navigation equipment.</span></article>
             </div>
           </div>
@@ -212,7 +213,7 @@ export default function HomePage() {
 
         <section className="section psych-final-section">
           <div className="container psych-final-cta glass premium">
-            <div><p className="eyebrow">Do not wait for the missing record to become the incident</p><h2>Put the next vessel decision where the whole team can see it.</h2><p>Start with the package your team needs. Neptune will keep every other module outside the workspace until the subscription includes it.</p></div>
+            <div><p className="eyebrow">Do not wait for the missing record to become the incident</p><h2>Put the next vessel decision where the whole team can see it.</h2><p>Start with the package your team needs. Neptune will keep every other operating module outside the workspace until the subscription includes it.</p></div>
             <div className="psych-final-actions"><Link className="btn gold" href="/signup">Start the 14-day trial</Link><InstallAppButton className="btn" label="Download app" /><Link className="btn" href="/pricing">Choose the right package</Link><small>Workspace access pauses automatically when the trial ends.</small></div>
           </div>
         </section>
