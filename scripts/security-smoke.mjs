@@ -57,6 +57,7 @@ assert("audit service", security.includes("insert into audit_events"), "append-o
 const orgAccess = read("src/lib/server/org-access.ts");
 assert("organization invitations", orgAccess.includes("user_invitations") && orgAccess.includes("sendInvitationEmail"), "secure invitations missing");
 assert("vessel permissions", orgAccess.includes("user_vessel_permissions") && orgAccess.includes("can_edit"), "vessel permissions missing");
+assert("invitation edit permission", orgAccess.includes("can_edit_vessels") && orgAccess.includes("Boolean(invitation.can_edit_vessels)"), "invited vessel edit access is not preserved");
 assert("user deactivation", orgAccess.includes("revokeAllAuthSessions") && orgAccess.includes("is_active"), "user deactivation does not revoke sessions");
 assert("device revocation", orgAccess.includes("wipe_requested_at") && orgAccess.includes("revoked_at"), "managed device revoke/wipe controls missing");
 
@@ -66,7 +67,7 @@ for (const header of ["Content-Security-Policy", "Strict-Transport-Security", "P
 }
 
 const packageJson = JSON.parse(read("package.json"));
-assert("patched Next.js", packageJson.dependencies.next === "15.5.23", "Next.js is not pinned to the patched maintenance release");
+assert("secure Next.js line", packageJson.dependencies.next === "16.3.1", "Next.js is not pinned to the audited secure release");
 assert("patched React", packageJson.dependencies.react === "19.2.8" && packageJson.dependencies["react-dom"] === "19.2.8", "React RSC security patch is not pinned");
 
 console.log(`Neptune security smoke checks passed: ${checks.length}`);
