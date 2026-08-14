@@ -1,0 +1,36 @@
+name: Neptune CSRF Regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  csrf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AUTH_SECRET: ci-csrf-only-neptune-secret
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3391
+      ALLOW_DEMO_LOGIN: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-fund --no-audit
+
+      - name: Build
+        run: npm run build
+
+      - name: CSRF origin/fetch-metadata checks
+        run: node scripts/csrf-smoke.mjs
