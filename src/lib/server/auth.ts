@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { getEntitlement, type Entitlement } from "@/src/lib/server/trial";
+import { createAuthSession, revokeAuthSession, validateAuthSession } from "@/src/lib/server/security";
 
-export type Session = { userId: string; orgId: string; role: string; email?: string; exp: number };
+export type Session = { userId: string; orgId: string; role: string; email?: string; sessionId?: string; exp: number };
 export type ProtectedSession = Session & { entitlement: Entitlement };
 const SESSION_COOKIE = "neptune_session_v2";
 const ACCESS_COOKIE = "neptune_access_v1";
@@ -15,9 +16,13 @@ function signature(body: string) {
   return createHmac("sha256", secret()).update(body).digest("base64url");
 }
 
-export function createToken(payload: Omit<Session, "exp">, hours = 12) {
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + hours * 60 * 60 * 1000 })).toString("base64url");
+function tokenWithExpiry(payload: Omit<Session, "exp">, exp: number) {
+  const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
   return `${body}.${signature(body)}`;
+}
+
+export function createToken(payload: Omit<Session, "exp">, hours = 12) {
+  return tokenWithExpiry(payload, Date.now() + hours * 60 * 60 * 1000);
 }
 
 export function verifyToken(token?: string | null): Session | null {
@@ -38,18 +43,47 @@ export function verifyToken(token?: string | null): Session | null {
 
 export async function getSession() {
   const jar = await cookies();
-  return verifyToken(jar.get(SESSION_COOKIE)?.value);
+  const session = verifyToken(jar.get(SESSION_COOKIE)?.value);
+  if (!session) return null;
+  if (session.sessionId) {
+    try {
+      if (!await validateAuthSession(session.sessionId, session.userId)) return null;
+    } catch {
+      return null;
+    }
+  }
+  return session;
 }
 
-export async function setSession(payload: Omit<Session, "exp">) {
+export async function setSession(
+  payload: Omit<Session, "exp" | "sessionId">,
+  options: { userAgent?: string | null; ip?: string | null; deviceLabel?: string | null; persist?: boolean } = {}
+) {
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, createToken(payload), {
+  let exp = Date.now() + 12 * 60 * 60 * 1000;
+  let sessionId: string | undefined;
+
+  if (options.persist !== false) {
+    const record = await createAuthSession({
+      userId: payload.userId,
+      orgId: payload.orgId,
+      userAgent: options.userAgent,
+      ip: options.ip,
+      deviceLabel: options.deviceLabel,
+      hours: 12
+    });
+    sessionId = record.id;
+    exp = record.exp;
+  }
+
+  jar.set(SESSION_COOKIE, tokenWithExpiry({ ...payload, sessionId }, exp), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 12
   });
+  return sessionId || null;
 }
 
 export async function setAccessCookie(entitlement: Entitlement) {
@@ -76,6 +110,10 @@ export async function setAccessCookie(entitlement: Entitlement) {
 
 export async function clearSession() {
   const jar = await cookies();
+  const current = verifyToken(jar.get(SESSION_COOKIE)?.value);
+  if (current?.sessionId) {
+    try { await revokeAuthSession(current.sessionId, current.userId); } catch {}
+  }
   jar.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
   jar.set(ACCESS_COOKIE, "", { path: "/", maxAge: 0 });
   jar.set("neptune_paid", "", { path: "/", maxAge: 0 });
