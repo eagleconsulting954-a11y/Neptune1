@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 10
+    groups:
+      next-react:
+        patterns:
+          - next
+          - react
+          - react-dom
+      production-runtime:
+        patterns:
+          - pg
+          - stripe
+          - bcryptjs
+    labels:
+      - dependencies
+      - security
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - security
