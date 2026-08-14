@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { GlobalErrorReporter } from "@/components/GlobalErrorReporter";
+import { ManagedDeviceBootstrap } from "@/components/ManagedDeviceBootstrap";
 import { OfflineStatus } from "@/components/OfflineStatus";
 import "./globals.css";
 import "./admin-logo.css";
@@ -22,7 +23,7 @@ import "./app-download.css";
 import "./emergency-gps.css";
 
 export const metadata: Metadata = {
-  title: "Neptune — Vessel Command CRM & Maritime Intelligence",
+  title: "Neptune — Vessel Command & Maritime Intelligence",
   description: "Neptune helps captains and fleet operators protect the vessel, crew, and schedule with accountable workflows, decision alerts, package-specific access, maritime intelligence, future EV vessel development programs, and offline ocean operations.",
   applicationName: "Neptune Vessel Command",
   manifest: "/manifest.webmanifest",
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Script src="/neptune-offline.js" strategy="beforeInteractive" />
         <Script src="/neptune-emergency-offline.js" strategy="beforeInteractive" />
         <GlobalErrorReporter />
+        <ManagedDeviceBootstrap />
         <OfflineStatus />
         {children}
       </body>
