@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { requireSession } from "@/src/lib/server/auth";
 import { findUserByEmail, listResource } from "@/src/lib/server/db";
 import {
@@ -13,6 +14,12 @@ import {
   revokeAuthSession,
   verifyUserMfa
 } from "@/src/lib/server/security";
+import {
+  beginPasskeyRegistration,
+  finishPasskeyRegistration,
+  listUserPasskeys,
+  removePasskey
+} from "@/src/lib/server/passkeys";
 import {
   canManageOrganization,
   createOrganizationInvitation,
@@ -37,6 +44,8 @@ function errorResponse(error: unknown) {
   if (message === "CANNOT_DEACTIVATE_SELF") return NextResponse.json({ error: "You cannot deactivate your own active session identity." }, { status: 400 });
   if (message === "USER_ALREADY_IN_ORG") return NextResponse.json({ error: "That user already belongs to this organization." }, { status: 409 });
   if (message === "EMAIL_ALREADY_REGISTERED") return NextResponse.json({ error: "That email is already registered to Neptune." }, { status: 409 });
+  if (message === "PASSKEY_NOT_FOUND") return NextResponse.json({ error: "Passkey not found." }, { status: 404 });
+  if (["PASSKEY_CHALLENGE_EXPIRED", "PASSKEY_REGISTRATION_FAILED", "PASSKEY_USER_NOT_ELIGIBLE"].includes(message)) return NextResponse.json({ error: "Passkey registration failed or expired. Start again from the security center." }, { status: 400 });
   if (message === "INVALID_EMAIL" || message === "INVALID_ROLE" || message === "INVALID_VESSEL_PERMISSION" || message === "ORGANIZATION_NAME_REQUIRED" || message === "INVALID_DEVICE_ACTION") return NextResponse.json({ error: message.replaceAll("_", " ").toLowerCase() }, { status: 400 });
   if (message === "USER_NOT_FOUND" || message === "DEVICE_NOT_FOUND") return NextResponse.json({ error: "Record not found." }, { status: 404 });
   if (message.startsWith("EMAIL_")) return NextResponse.json({ error: "Secure email delivery is not configured or failed." }, { status: 503 });
@@ -48,10 +57,11 @@ export async function GET() {
   try {
     const session = await requireSession();
     const managerAccess = canManageOrganization(session);
-    const [security, sessions, organization] = await Promise.all([
+    const [security, sessions, organization, passkeys] = await Promise.all([
       getUserSecurityState(session.userId),
       listAuthSessions(session.userId),
-      getOrganizationProfile(session.orgId)
+      getOrganizationProfile(session.orgId),
+      listUserPasskeys(session.userId)
     ]);
 
     const [users, invitations, devices, audit, vessels] = managerAccess
@@ -70,6 +80,7 @@ export async function GET() {
       security,
       sessions,
       organization,
+      passkeys,
       users,
       invitations,
       devices,
@@ -107,6 +118,27 @@ export async function POST(request: Request) {
       await disableMfa(session.userId);
       await recordAuditEvent({ session, action: "security.mfa_disabled", entityType: "user", entityId: session.userId, route: "/api/v1/security-center", method: "POST", request });
       return NextResponse.json({ ok: true });
+    }
+
+    if (action === "passkey_options") {
+      const options = await beginPasskeyRegistration(session, process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin);
+      return NextResponse.json({ options });
+    }
+
+    if (action === "passkey_register") {
+      const passkey = await finishPasskeyRegistration({
+        session,
+        appUrl: process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin,
+        response: body.response as RegistrationResponseJSON,
+        label: String(body.label || "Passkey"),
+        request
+      });
+      return NextResponse.json({ passkey }, { status: 201 });
+    }
+
+    if (action === "passkey_remove") {
+      const passkey = await removePasskey(session, String(body.passkeyId || ""), request);
+      return NextResponse.json({ passkey });
     }
 
     if (action === "revoke_session") {
