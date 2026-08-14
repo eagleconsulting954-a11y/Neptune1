@@ -1,21 +1,46 @@
-name: Build Neptune1
+name: Neptune Enterprise CI
 
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neptune-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_SECRET: ci-only-neptune-secret-not-for-production-please-replace
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      ALLOW_DEMO_LOGIN: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Use Node.js
+
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Build application
+        run: npm install --no-fund --no-audit
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Security regression checks
+        run: npm run test:security
+
+      - name: Production build
         run: npm run build
+
+      - name: High-severity dependency audit
+        run: npm run audit:high
