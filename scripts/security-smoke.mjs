@@ -49,6 +49,8 @@ assert("revocable sessions", login.includes("setSession") && login.includes("dev
 const passkeyApi = read("app/api/auth/passkey/route.ts");
 const passkeys = read("src/lib/server/passkeys.ts");
 assert("passkey login", passkeyApi.includes("finishPasskeyAuthentication") && passkeyApi.includes("setSession"), "passkey login flow missing");
+assert("passkey safe redirect", passkeyApi.includes("function safeRedirect") && passkeyApi.includes("!path.startsWith(\"//\")"), "passkey login has no same-origin redirect sanitizer");
+assert("passkey failure accounting", passkeyApi.includes("attemptedEmail") && passkeyApi.includes("noteLoginFailure(attemptedEmail"), "failed passkey verification is not counted toward lockout");
 assert("passkey user verification", passkeys.includes('userVerification: "required"') && passkeys.includes("requireUserVerification: true"), "passkeys do not require user verification");
 assert("passkey challenge persistence", passkeys.includes("webauthn_challenges") && passkeys.includes("consumeChallenge"), "passkey challenges are not persisted and consumed");
 assert("passkey public key persistence", passkeys.includes("webauthn_credentials") && passkeys.includes("public_key"), "passkey public keys are not persisted");
@@ -73,6 +75,10 @@ assert("vessel permissions", orgAccess.includes("user_vessel_permissions") && or
 assert("invitation edit permission", orgAccess.includes("can_edit_vessels") && orgAccess.includes("Boolean(invitation.can_edit_vessels)"), "invited vessel edit access is not preserved");
 assert("user deactivation", orgAccess.includes("revokeAllAuthSessions") && orgAccess.includes("is_active"), "user deactivation does not revoke sessions");
 assert("device revocation", orgAccess.includes("wipe_requested_at") && orgAccess.includes("revoked_at"), "managed device revoke/wipe controls missing");
+
+const secondaryProvision = read("app/api/platform-admin/provision-secondary/route.ts");
+assert("secondary admin fixed identity", secondaryProvision.includes("designatedAdminEmails()[1]") && secondaryProvision.includes("PRIMARY_ADMIN_REQUIRED"), "secondary admin provisioning is not restricted to the approved identity and primary admin");
+assert("secondary admin secure invite", secondaryProvision.includes("createOrganizationInvitation") && secondaryProvision.includes('role: "org_admin"'), "secondary admin is not provisioned through a secure one-time invitation");
 
 const emergencyEvents = read("app/api/v1/emergency-events/route.ts");
 const emergencyPositions = read("app/api/v1/emergency-positions/route.ts");
