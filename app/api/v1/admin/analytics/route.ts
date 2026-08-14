@@ -24,15 +24,12 @@ export async function GET() {
   try {
     const session = await requireSession();
     if (!isDesignatedAdminEmail(session.email)) {
-      return NextResponse.json({ error: "CRM and administrator access is restricted to the designated admin email." }, { status: 403 });
-    }
-    if (!canAccessModule(session.entitlement.plan, "analytics")) {
-      return NextResponse.json({ error: "Fleet analytics is included in FleetOps, Full Vessel Access, and Enterprise packages.", code: "PLAN_UPGRADE_REQUIRED" }, { status: 403 });
+      return NextResponse.json({ error: "CRM and administrator access is restricted to the two designated Neptune administrator emails." }, { status: 403 });
     }
 
     const raw = await dashboard(session.orgId);
     const data = filterDashboardForPlan(raw, session.entitlement.plan);
-    const crm = data.crm || [];
+    const crm = raw.crm || [];
     const events = data.events || [];
     const stages: Record<string, { count: number; value: number }> = crm.reduce((acc: Record<string, { count: number; value: number }>, account: any) => {
       const stage = account.stage || "Unassigned";
@@ -69,7 +66,7 @@ export async function GET() {
     return NextResponse.json({
       storageMode: data.storageMode,
       organization: { id: session.orgId, role: session.role, email: session.email, plan: session.entitlement.planName },
-      package: data.package,
+      package: { ...data.package, modules: Array.from(new Set([...(data.package?.modules || []), "crm", "analytics"])) },
       summary: {
         accounts: crm.length,
         pipeline,
