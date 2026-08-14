@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/AdminDashboard";
 import { TrialAccessMonitor } from "@/components/TrialAccessMonitor";
 import { requireSession } from "@/src/lib/server/auth";
-import { canAccessModule } from "@/src/lib/plans";
 import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 
 export default async function AdminPage() {
@@ -16,7 +15,6 @@ export default async function AdminPage() {
   }
 
   if (!isDesignatedAdminEmail(session.email)) redirect("/dashboard");
-  if (!canAccessModule(session.entitlement.plan, "analytics")) redirect("/pricing?required=analytics");
 
   return (
     <>
