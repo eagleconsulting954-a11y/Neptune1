@@ -34,12 +34,14 @@ import {
   updateOrganizationUser,
   upsertManagedDevice
 } from "@/src/lib/server/org-access";
+import { assertAdministratorCapacity } from "@/src/lib/server/org-limits";
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "UNKNOWN";
   if (message === "UNAUTHORIZED") return NextResponse.json({ error: "Login required." }, { status: 401 });
   if (message === "TRIAL_EXPIRED" || message === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "Active Neptune access is required." }, { status: 402 });
   if (message === "ORG_MANAGER_REQUIRED") return NextResponse.json({ error: "Organization manager access is required." }, { status: 403 });
+  if (message === "ADMINISTRATOR_LIMIT_REACHED") return NextResponse.json({ error: "This package has reached its organization-administrator limit. Upgrade the package or deactivate another administrator before adding one." }, { status: 403 });
   if (message === "PROTECTED_ADMIN_IDENTITY") return NextResponse.json({ error: "A designated Neptune administrator identity cannot be changed by another organization user." }, { status: 403 });
   if (message === "CANNOT_DEACTIVATE_SELF") return NextResponse.json({ error: "You cannot deactivate your own active session identity." }, { status: 400 });
   if (message === "USER_ALREADY_IN_ORG") return NextResponse.json({ error: "That user already belongs to this organization." }, { status: 409 });
@@ -155,10 +157,12 @@ export async function POST(request: Request) {
     }
 
     if (action === "invite_user") {
+      const role = String(body.role || "member");
+      await assertAdministratorCapacity(session.orgId, session.entitlement.plan, role);
       const invitation = await createOrganizationInvitation({
         session,
         email: String(body.email || ""),
-        role: String(body.role || "member"),
+        role,
         vesselIds: Array.isArray(body.vesselIds) ? body.vesselIds.map(String) : [],
         canEditVessels: Boolean(body.canEditVessels),
         appUrl: process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin,
@@ -169,9 +173,11 @@ export async function POST(request: Request) {
     }
 
     if (action === "update_user") {
+      const targetUserId = String(body.userId || "");
+      if (body.role) await assertAdministratorCapacity(session.orgId, session.entitlement.plan, String(body.role), targetUserId);
       const user = await updateOrganizationUser({
         session,
-        userId: String(body.userId || ""),
+        userId: targetUserId,
         role: body.role ? String(body.role) : undefined,
         isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
         vesselIds: Array.isArray(body.vesselIds) ? body.vesselIds.map(String) : undefined,
