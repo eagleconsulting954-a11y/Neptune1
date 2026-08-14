@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "crypto";
 import { getSession } from "@/src/lib/server/auth";
+import { designatedAdminEmails, isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 import { ensureSchema, hasDatabase, sql, type Row } from "@/src/lib/server/db";
 
 export type SystemErrorInput = {
@@ -16,21 +17,10 @@ export type SystemErrorInput = {
   metadata?: Record<string, unknown> | null;
 };
 
-function platformEmails() {
-  return [process.env.PLATFORM_ADMIN_EMAILS, process.env.NEPTUNE_OWNER_EMAIL]
-    .filter(Boolean)
-    .join(",")
-    .split(",")
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 export async function requirePlatformAdmin() {
   const session = await getSession();
   if (!session) throw new Error("UNAUTHORIZED");
-  const roleAllowed = ["platform_admin", "owner", "super_admin"].includes(String(session.role).toLowerCase());
-  const emailAllowed = Boolean(session.email && platformEmails().includes(session.email.toLowerCase()));
-  if (!roleAllowed && !emailAllowed) throw new Error("FORBIDDEN");
+  if (!isDesignatedAdminEmail(session.email)) throw new Error("FORBIDDEN");
   return session;
 }
 
@@ -114,7 +104,7 @@ function configHealth() {
     { key: "weather", label: "Weather and ocean provider", configured: Boolean(process.env.OPEN_METEO_WEATHER_BASE_URL || "https://api.open-meteo.com/v1/forecast"), critical: false },
     { key: "congestion", label: "Port congestion provider", configured: Boolean(process.env.MARINETRAFFIC_API_KEY && process.env.MARINETRAFFIC_PORT_CONGESTION_URL), critical: false },
     { key: "bunker", label: "Bunker price provider", configured: Boolean(process.env.BUNKER_PRICE_API_URL), critical: false },
-    { key: "owner", label: "Platform administrator", configured: platformEmails().length > 0, critical: true }
+    { key: "owner", label: "Platform administrators", configured: designatedAdminEmails().length === 2, critical: true }
   ];
 }
 
