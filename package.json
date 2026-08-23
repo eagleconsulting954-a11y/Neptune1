@@ -13,6 +13,7 @@
     "test": "npm run test:security && npm run test:http",
     "test:security": "node scripts/security-smoke.mjs",
     "test:http": "node scripts/http-smoke.mjs",
+    "test:crm": "node scripts/crm-e2e.mjs",
     "audit:high": "npm audit --audit-level=high",
     "ci": "npm run typecheck && npm run test:security && npm run build && npm run test:http && npm run audit:high"
   },
