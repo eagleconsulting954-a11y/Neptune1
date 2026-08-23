@@ -79,6 +79,7 @@ async function request(path, { cookie, method = "GET", body } = {}) {
 const stamp = Date.now().toString(36);
 const orgId = `org_crm_ci_${stamp}`;
 const ownerId = `usr_crm_owner_${stamp}`;
+const secondaryId = `usr_crm_secondary_${stamp}`;
 const managerId = `usr_crm_manager_${stamp}`;
 const managerEmail = `crm-manager-${stamp}@example.test`;
 const password = "EnterpriseCrmTest123!";
@@ -93,14 +94,22 @@ try {
   await client.query(`
     insert into users(id,org_id,name,email,password_hash,role,email_verified_at,is_active)
     values($1,$2,'CRM Owner','francis@canalclear.org',$3,'owner',now(),true),
-          ($4,$2,'CRM Manager',$5,$3,'fleet_manager',now(),true)
-  `, [ownerId, orgId, hash, managerId, managerEmail]);
-  await client.query("insert into subscriptions(id,org_id,customer_id,subscription_id,plan,status,current_period_end) values($1,$2,null,null,'full_vessel_access','active',null)", [`sub_crm_ci_${stamp}`, orgId]);
+          ($4,$2,'CRM Secondary Admin','rajput.jaspal@yahoo.in',$3,'org_admin',now(),true),
+          ($5,$2,'CRM Manager',$6,$3,'fleet_manager',now(),true)
+  `, [ownerId, orgId, hash, secondaryId, managerId, managerEmail]);
+  await client.query(
+    "insert into subscriptions(id,org_id,stripe_customer_id,stripe_subscription_id,plan,status,current_period_end) values($1,$2,null,null,'full_vessel_access','active',null)",
+    [`sub_crm_ci_${stamp}`, orgId]
+  );
 
   const ownerCookie = await login("francis@canalclear.org", password);
+  const secondaryCookie = await login("rajput.jaspal@yahoo.in", password);
   const managerCookie = await login(managerEmail, password);
 
-  let call = await request("/api/v1/admin/crm", {
+  let call = await request("/api/v1/admin/crm", { cookie: secondaryCookie });
+  assert("secondary designated admin can read CRM", call.response.status === 200, `${call.response.status}: ${JSON.stringify(call.result)}`);
+
+  call = await request("/api/v1/admin/crm", {
     cookie: managerCookie,
     method: "POST",
     body: { company: "Denied Shipping", annual_value: 1 }
@@ -133,6 +142,9 @@ try {
   const firstId = call.result.item?.id;
   assert("extended CRM fields persist", call.result.item?.contact_title === "VP Fleet Operations" && call.result.item?.owner === "Francis" && Number(call.result.item?.probability) === 65, JSON.stringify(call.result.item));
 
+  call = await request("/api/v1/admin/crm", { cookie: secondaryCookie });
+  assert("secondary admin sees primary-admin CRM writes", call.response.status === 200 && call.result.items?.some(item => item.id === firstId), JSON.stringify(call.result));
+
   call = await request("/api/v1/admin/analytics", { cookie: ownerCookie });
   assert("admin CRM analytics loads", call.response.status === 200, `${call.response.status}: ${JSON.stringify(call.result)}`);
   assert("active pipeline excludes closed deals", Number(call.result.summary?.pipeline) === 240000, JSON.stringify(call.result.summary));
@@ -145,6 +157,12 @@ try {
 
   call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "PATCH", body: { id: firstId, last_contact_at: new Date().toISOString(), next_action: "Confirm procurement decision" } });
   assert("contact and next action update", call.response.status === 200 && call.result.item?.next_action === "Confirm procurement decision", JSON.stringify(call.result));
+
+  call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "PATCH", body: { id: firstId, stage: "Lost", lost_reason: "Temporary test reason" } });
+  assert("lost transition forces zero probability", call.response.status === 200 && Number(call.result.item?.probability) === 0 && call.result.item?.lost_reason === "Temporary test reason", JSON.stringify(call.result.item));
+
+  call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "PATCH", body: { id: firstId, stage: "Negotiation" } });
+  assert("moving out of lost clears lost reason", call.response.status === 200 && !call.result.item?.lost_reason && Number(call.result.item?.probability) === 80, JSON.stringify(call.result.item));
 
   call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "PATCH", body: { id: firstId, stage: "Won" } });
   assert("won transition forces 100 percent probability", call.response.status === 200 && Number(call.result.item?.probability) === 100, JSON.stringify(call.result));
@@ -164,14 +182,17 @@ try {
   call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "POST", body: { company: "Invalid Email Co", email: "not-an-email" } });
   assert("CRM validation rejects invalid email", call.response.status === 400, `received ${call.response.status}`);
 
+  call = await request("/api/v1/admin/crm", { cookie: ownerCookie, method: "POST", body: { company: "Invalid Currency Co", currency: "USDX" } });
+  assert("CRM validation rejects invalid currency", call.response.status === 400, `received ${call.response.status}`);
+
   const audit = await client.query("select action from audit_events where org_id=$1 and entity_type='crm_accounts' order by created_at", [orgId]);
   const actions = audit.rows.map(row => row.action);
   assert("CRM audit records creation", actions.includes("crm.opportunity_created"), JSON.stringify(actions));
   assert("CRM audit records stage changes", actions.includes("crm.stage_changed"), JSON.stringify(actions));
   assert("CRM audit records updates", actions.includes("crm.opportunity_updated"), JSON.stringify(actions));
 
-  call = await request(`/api/v1/admin/crm?id=${encodeURIComponent(firstId)}`, { cookie: ownerCookie, method: "DELETE" });
-  assert("CRM opportunity deletes", call.response.status === 200 && call.result.ok === true, JSON.stringify(call.result));
+  call = await request(`/api/v1/admin/crm?id=${encodeURIComponent(firstId)}`, { cookie: secondaryCookie, method: "DELETE" });
+  assert("secondary admin can delete CRM opportunity", call.response.status === 200 && call.result.ok === true, JSON.stringify(call.result));
   call = await request(`/api/v1/admin/crm?id=${encodeURIComponent(lostId)}`, { cookie: ownerCookie, method: "DELETE" });
   assert("second CRM opportunity deletes", call.response.status === 200 && call.result.ok === true, JSON.stringify(call.result));
 
