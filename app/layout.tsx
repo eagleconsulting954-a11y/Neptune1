@@ -5,6 +5,7 @@ import { ManagedDeviceBootstrap } from "@/components/ManagedDeviceBootstrap";
 import { OfflineStatus } from "@/components/OfflineStatus";
 import "./globals.css";
 import "./admin-logo.css";
+import "./admin-crm.css";
 import "./dashboard-admin-link.css";
 import "./real-data.css";
 import "./demo.css";
