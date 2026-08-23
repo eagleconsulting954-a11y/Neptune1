@@ -16,6 +16,7 @@ export const CRM_STAGES = [
 export type CrmStage = (typeof CRM_STAGES)[number]["name"];
 
 const CRM_STAGE_NAMES = new Set(CRM_STAGES.map(stage => stage.name));
+const CRM_SCHEMA_MIGRATION = "20260823_008_enterprise_crm_pipeline";
 const CRM_FIELDS = [
   "company",
   "contact",
@@ -41,6 +42,9 @@ let crmSchemaReady: Promise<void> | null = null;
 export async function ensureCrmSchema() {
   if (crmSchemaReady) return crmSchemaReady;
   crmSchemaReady = (async () => {
+    const [applied] = await sql<Row>("select id from schema_migrations where id=$1 limit 1", [CRM_SCHEMA_MIGRATION]);
+    if (applied) return;
+
     await sql(`
       alter table crm_accounts add column if not exists contact_title text;
       alter table crm_accounts add column if not exists phone text;
@@ -67,14 +71,13 @@ export async function ensureCrmSchema() {
         when 'won' then 100
         when 'lost' then 0
         else probability
-      end
-      where probability is null or probability=30;
+      end;
 
       create index if not exists idx_crm_accounts_org_stage on crm_accounts(org_id,stage);
       create index if not exists idx_crm_accounts_org_owner on crm_accounts(org_id,owner);
       create index if not exists idx_crm_accounts_org_close on crm_accounts(org_id,expected_close_at);
       create index if not exists idx_crm_accounts_org_followup on crm_accounts(org_id,next_action_at);
-      insert into schema_migrations(id) values('20260823_008_enterprise_crm_pipeline') on conflict(id) do nothing;
+      insert into schema_migrations(id) values('${CRM_SCHEMA_MIGRATION}') on conflict(id) do nothing;
     `);
   })().catch(error => {
     crmSchemaReady = null;
@@ -101,6 +104,12 @@ function optionalEmail(value: unknown) {
   return email.toLowerCase();
 }
 
+function currencyCode(value: unknown) {
+  const currency = (cleanString(value, 3) || "USD").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error("CRM_CURRENCY_INVALID");
+  return currency;
+}
+
 function numeric(value: unknown, field: string, min: number, max: number) {
   if (value === undefined || value === null || value === "") return null;
   const amount = Number(value);
@@ -111,9 +120,11 @@ function numeric(value: unknown, field: string, min: number, max: number) {
 function dateOnly(value: unknown, field: string) {
   const text = cleanString(value, 32);
   if (!text) return null;
-  const parsed = new Date(`${text.slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) throw new Error(`CRM_${field.toUpperCase()}_INVALID`);
-  return text.slice(0, 10);
+  const candidate = text.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate)) throw new Error(`CRM_${field.toUpperCase()}_INVALID`);
+  const parsed = new Date(`${candidate}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== candidate) throw new Error(`CRM_${field.toUpperCase()}_INVALID`);
+  return candidate;
 }
 
 function dateTime(value: unknown, field: string) {
@@ -145,7 +156,7 @@ function sanitizeCreate(input: Record<string, unknown>) {
     phone: cleanString(input.phone, 80),
     stage,
     annual_value: numeric(input.annual_value, "annual_value", 0, 1_000_000_000_000) ?? 0,
-    currency: (cleanString(input.currency, 3) || "USD").toUpperCase(),
+    currency: currencyCode(input.currency),
     probability: stage === "Won" ? 100 : stage === "Lost" ? 0 : explicitProbability ?? stageProbability(stage),
     owner: cleanString(input.owner, 160),
     source: cleanString(input.source, 160),
@@ -169,7 +180,7 @@ function sanitizePatch(input: Record<string, unknown>, existing: Row) {
     else if (field === "phone") patch.phone = cleanString(input.phone, 80);
     else if (field === "stage") patch.stage = normalizeStage(input.stage, normalizeStage(existing.stage));
     else if (field === "annual_value") patch.annual_value = numeric(input.annual_value, "annual_value", 0, 1_000_000_000_000) ?? 0;
-    else if (field === "currency") patch.currency = (cleanString(input.currency, 3) || "USD").toUpperCase();
+    else if (field === "currency") patch.currency = currencyCode(input.currency);
     else if (field === "probability") patch.probability = numeric(input.probability, "probability", 0, 100) ?? stageProbability(String(existing.stage || "Qualified"));
     else if (field === "owner") patch.owner = cleanString(input.owner, 160);
     else if (field === "source") patch.source = cleanString(input.source, 160);
@@ -182,7 +193,8 @@ function sanitizePatch(input: Record<string, unknown>, existing: Row) {
   }
 
   const nextStage = String(patch.stage || existing.stage || "Qualified");
-  if (patch.stage && patch.stage !== existing.stage) {
+  const stageChanged = Boolean(patch.stage && patch.stage !== existing.stage);
+  if (stageChanged) {
     patch.stage_changed_at = new Date().toISOString();
     if (!Object.prototype.hasOwnProperty.call(input, "probability")) patch.probability = stageProbability(nextStage);
   }
@@ -191,7 +203,7 @@ function sanitizePatch(input: Record<string, unknown>, existing: Row) {
     patch.lost_reason = null;
   } else if (nextStage === "Lost") {
     patch.probability = 0;
-  } else if (Object.prototype.hasOwnProperty.call(patch, "lost_reason")) {
+  } else if (stageChanged || existing.lost_reason || Object.prototype.hasOwnProperty.call(patch, "lost_reason")) {
     patch.lost_reason = null;
   }
   patch.updated_at = new Date().toISOString();
@@ -374,7 +386,11 @@ export function buildCrmAnalytics(accounts: Row[]) {
 
   const forecast = [30, 60, 90].map(days => {
     const cutoff = now + days * 86_400_000;
-    const rows = active.filter(account => account.expected_close_at && new Date(`${String(account.expected_close_at).slice(0,10)}T23:59:59Z`).getTime() <= cutoff);
+    const rows = active.filter(account => {
+      if (!account.expected_close_at) return false;
+      const close = new Date(`${String(account.expected_close_at).slice(0, 10)}T23:59:59Z`).getTime();
+      return close >= now && close <= cutoff;
+    });
     return {
       days,
       value: Math.round(rows.reduce((sum, account) => sum + Number(account.annual_value || 0), 0)),
