@@ -1,0 +1,58 @@
+name: Neptune CRM Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neptune-crm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: neptune
+          POSTGRES_PASSWORD: neptune
+          POSTGRES_DB: neptune_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U neptune -d neptune_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgres://neptune:neptune@127.0.0.1:5432/neptune_ci
+      AUTH_SECRET: ci-only-neptune-crm-secret-not-for-production
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3382
+      ALLOW_DEMO_LOGIN: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-fund --no-audit
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      - name: Database-backed CRM pipeline tests
+        run: node scripts/crm-e2e.mjs
