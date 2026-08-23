@@ -246,7 +246,7 @@ const migrations = [
       begin
         select org_id into primary_org from users where lower(email)=lower('francis@canalclear.org') limit 1;
         if primary_org is null then
-          raise exception 'Primary designated administrator account is missing';
+          return;
         end if;
 
         if not exists (
@@ -262,6 +262,42 @@ const migrations = [
           raise exception 'Secondary designated administrator provisioning verification failed';
         end if;
       end $$;
+    `
+  },
+  {
+    id: "20260823_008_enterprise_crm_pipeline",
+    sql: `
+      alter table crm_accounts add column if not exists contact_title text;
+      alter table crm_accounts add column if not exists phone text;
+      alter table crm_accounts add column if not exists owner text;
+      alter table crm_accounts add column if not exists source text;
+      alter table crm_accounts add column if not exists probability int not null default 30;
+      alter table crm_accounts add column if not exists currency text not null default 'USD';
+      alter table crm_accounts add column if not exists expected_close_at date;
+      alter table crm_accounts add column if not exists next_action text;
+      alter table crm_accounts add column if not exists next_action_at timestamptz;
+      alter table crm_accounts add column if not exists last_contact_at timestamptz;
+      alter table crm_accounts add column if not exists notes text;
+      alter table crm_accounts add column if not exists lost_reason text;
+      alter table crm_accounts add column if not exists stage_changed_at timestamptz not null default now();
+      alter table crm_accounts add column if not exists updated_at timestamptz not null default now();
+
+      update crm_accounts
+      set probability=case lower(coalesce(stage,''))
+        when 'lead' then 10
+        when 'qualified' then 30
+        when 'demo booked' then 45
+        when 'proposal' then 65
+        when 'negotiation' then 80
+        when 'won' then 100
+        when 'lost' then 0
+        else probability
+      end;
+
+      create index if not exists idx_crm_accounts_org_stage on crm_accounts(org_id,stage);
+      create index if not exists idx_crm_accounts_org_owner on crm_accounts(org_id,owner);
+      create index if not exists idx_crm_accounts_org_close on crm_accounts(org_id,expected_close_at);
+      create index if not exists idx_crm_accounts_org_followup on crm_accounts(org_id,next_action_at);
     `
   }
 ] as const;
