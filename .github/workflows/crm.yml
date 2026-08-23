@@ -55,4 +55,4 @@ jobs:
         run: npm run build
 
       - name: Database-backed CRM pipeline tests
-        run: node scripts/crm-e2e.mjs
+        run: npm run test:crm
