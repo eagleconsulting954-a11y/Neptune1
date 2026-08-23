@@ -5,6 +5,7 @@ import { canAccessResource, planDefinition } from "@/src/lib/plans";
 import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 import { assertResourceWriteAccess, scopeResourceRows } from "@/src/lib/server/org-access";
 import { recordAuditEvent } from "@/src/lib/server/security";
+import { createCrmAccount, deleteCrmAccount, listCrmAccounts, updateCrmAccount } from "@/src/lib/server/crm-admin";
 
 const allowed = new Set<ResourceName>([
   "vessels",
@@ -47,6 +48,12 @@ function errorResponse(error: unknown) {
   if (message === "VESSEL_LIMIT_REACHED") return NextResponse.json({ error: "The Captain package supports one vessel. Upgrade to FleetOps or Full Vessel Access to add more vessels.", code: "VESSEL_LIMIT_REACHED" }, { status: 403 });
   if (message === "NOT_FOUND") return NextResponse.json({ error: "Unknown resource" }, { status: 404 });
   if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "Persistent database is not configured. Add DATABASE_URL before creating real records." }, { status: 503 });
+  if (message === "CRM_NOT_FOUND") return NextResponse.json({ error: "CRM opportunity not found." }, { status: 404 });
+  if (message === "CRM_NO_CHANGES") return NextResponse.json({ error: "No CRM changes were supplied." }, { status: 400 });
+  if (message === "CRM_COMPANY_REQUIRED") return NextResponse.json({ error: "Company is required." }, { status: 400 });
+  if (message === "CRM_EMAIL_INVALID") return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  if (message === "CRM_STAGE_INVALID") return NextResponse.json({ error: "Select a valid pipeline stage." }, { status: 400 });
+  if (message.startsWith("CRM_") && message.endsWith("_INVALID")) return NextResponse.json({ error: "One or more CRM values are invalid." }, { status: 400 });
   console.error(error);
   return NextResponse.json({ error: "Unable to complete request" }, { status: 500 });
 }
@@ -57,6 +64,7 @@ export async function GET(_: Request, context: { params: Promise<{ resource: str
     const resource = await resourceFrom(context);
     assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource, session.email);
+    if (resource === "crm_accounts") return NextResponse.json({ items: await listCrmAccounts(session.orgId) });
     const rows = await listResource(resource, session.orgId);
     return NextResponse.json({ items: await scopeResourceRows(session, resource, rows) });
   } catch (error) {
@@ -71,8 +79,13 @@ export async function POST(request: Request, context: { params: Promise<{ resour
     assertIdentityAccess(session.email, resource);
     assertPlanAccess(session.entitlement.plan, resource, session.email);
     const body = await request.json();
-    await assertResourceWriteAccess(session, resource, body);
 
+    if (resource === "crm_accounts") {
+      const item = await createCrmAccount(session, body, request);
+      return NextResponse.json({ item }, { status: 201 });
+    }
+
+    await assertResourceWriteAccess(session, resource, body);
     if (resource === "vessels") {
       const definition = planDefinition(session.entitlement.plan);
       const maxVessels = definition.limits.vessels;
@@ -98,6 +111,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ resou
     assertPlanAccess(session.entitlement.plan, resource, session.email);
     const body = await request.json();
     if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+    if (resource === "crm_accounts") {
+      const item = await updateCrmAccount(session, String(body.id), body, request);
+      return NextResponse.json({ item });
+    }
+
     const existing = (await listResource(resource, session.orgId)).find(row => String(row.id) === String(body.id)) || null;
     if (!existing) return NextResponse.json({ error: "Record not found" }, { status: 404 });
     await assertResourceWriteAccess(session, resource, body, existing);
@@ -119,6 +138,12 @@ export async function DELETE(request: Request, context: { params: Promise<{ reso
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+    if (resource === "crm_accounts") {
+      await deleteCrmAccount(session, id, request);
+      return NextResponse.json({ ok: true });
+    }
+
     const existing = (await listResource(resource, session.orgId)).find(row => String(row.id) === id) || null;
     if (!existing) return NextResponse.json({ error: "Record not found" }, { status: 404 });
     await assertResourceWriteAccess(session, resource, { id }, existing);
