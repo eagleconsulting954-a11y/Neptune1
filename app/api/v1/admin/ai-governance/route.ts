@@ -86,13 +86,16 @@ export async function DELETE(request: Request) {
     const id = String(url.searchParams.get("id") || "").trim();
     if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
 
-    const [evidence] = await sql(`
+    const [history] = await sql(`
       select
+        (select count(*)::int from ai_governance_controls where org_id=$1 and system_id=$2) as controls,
+        (select count(*)::int from ai_governance_findings where org_id=$1 and system_id=$2) as findings,
         (select count(*)::int from ai_decision_records where org_id=$1 and system_id=$2) as decisions,
         (select count(*)::int from ai_assurance_evaluations where org_id=$1 and system_id=$2) as evaluations
     `, [session.orgId, id]);
-    if (Number(evidence?.decisions || 0) || Number(evidence?.evaluations || 0)) {
-      return NextResponse.json({ error: "This AI system has append-only governance evidence. Retire the system instead of deleting it." }, { status: 409 });
+    const governanceHistory = Number(history?.controls || 0) + Number(history?.findings || 0) + Number(history?.decisions || 0) + Number(history?.evaluations || 0);
+    if (governanceHistory > 0) {
+      return NextResponse.json({ error: "This AI system has governance history. Retire the system instead of deleting it so its control and evidence record remains intact." }, { status: 409 });
     }
 
     await deleteAiSystem(session, id, request);
