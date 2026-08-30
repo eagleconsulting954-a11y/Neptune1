@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/AdminDashboard";
+import { AIGovernanceShortcut } from "@/components/AIGovernanceShortcut";
 import { TrialAccessMonitor } from "@/components/TrialAccessMonitor";
 import { requireSession } from "@/src/lib/server/auth";
 import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
@@ -19,6 +20,7 @@ export default async function AdminPage() {
   return (
     <>
       <TrialAccessMonitor />
+      <AIGovernanceShortcut />
       <AdminDashboard />
     </>
   );
