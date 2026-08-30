@@ -22,6 +22,8 @@ import "./offline.css";
 import "./install-app.css";
 import "./app-download.css";
 import "./emergency-gps.css";
+import "./ai-governance.css";
+import "./ai-governance-shortcut.css";
 
 export const metadata: Metadata = {
   title: "Neptune — Vessel Command & Maritime Intelligence",
