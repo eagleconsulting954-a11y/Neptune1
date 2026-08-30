@@ -81,7 +81,7 @@ export async function ensureAiGovernanceSchema() {
       create table if not exists ai_assurance_evaluations (
         id text primary key,
         org_id text not null references organizations(id) on delete cascade,
-        system_id text not null references ai_systems(id) on delete cascade,
+        system_id text not null references ai_systems(id) on delete restrict,
         evaluation_type text not null,
         score int,
         status text not null default 'Completed',
@@ -95,7 +95,7 @@ export async function ensureAiGovernanceSchema() {
       create table if not exists ai_decision_records (
         id text primary key,
         org_id text not null references organizations(id) on delete cascade,
-        system_id text not null references ai_systems(id) on delete cascade,
+        system_id text not null references ai_systems(id) on delete restrict,
         model_version text,
         prompt_version text,
         authority_level text not null,
@@ -111,6 +111,26 @@ export async function ensureAiGovernanceSchema() {
         check (confidence is null or (confidence between 0 and 100))
       );
       create index if not exists idx_ai_decisions_system on ai_decision_records(org_id,system_id,created_at desc);
+
+      create or replace function neptune_prevent_ai_evidence_mutation() returns trigger as $$
+      begin
+        raise exception 'AI governance evidence is append-only';
+      end;
+      $$ language plpgsql;
+
+      do $$
+      begin
+        if not exists (select 1 from pg_trigger where tgname='trg_neptune_ai_decision_immutable') then
+          create trigger trg_neptune_ai_decision_immutable
+          before update or delete on ai_decision_records
+          for each row execute function neptune_prevent_ai_evidence_mutation();
+        end if;
+        if not exists (select 1 from pg_trigger where tgname='trg_neptune_ai_evaluation_immutable') then
+          create trigger trg_neptune_ai_evaluation_immutable
+          before update or delete on ai_assurance_evaluations
+          for each row execute function neptune_prevent_ai_evidence_mutation();
+        end if;
+      end $$;
 
       insert into schema_migrations(id) values('${MIGRATION_ID}') on conflict(id) do nothing;
     `);
