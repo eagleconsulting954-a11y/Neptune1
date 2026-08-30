@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/src/lib/server/auth";
-import { ensureSchema } from "@/src/lib/server/db";
+import { ensureSchema, sql } from "@/src/lib/server/db";
 import { isDesignatedAdminEmail } from "@/src/lib/server/admin-access";
 import { ensureAiGovernanceSchema } from "@/src/lib/server/ai-governance-schema";
 import {
   createAiSystem,
   createFinding,
   deleteAiSystem,
-  deleteDecision,
   listGovernance,
   recordDecision,
   recordEvaluation,
@@ -24,7 +23,6 @@ function responseForError(error: unknown) {
   if (message === "DATABASE_REQUIRED") return NextResponse.json({ error: "Production PostgreSQL is required for AI Governance." }, { status: 503 });
   if (message === "AI_GOV_SYSTEM_NOT_FOUND") return NextResponse.json({ error: "AI system not found." }, { status: 404 });
   if (message === "AI_GOV_FINDING_NOT_FOUND") return NextResponse.json({ error: "Governance finding not found." }, { status: 404 });
-  if (message === "AI_GOV_DECISION_NOT_FOUND") return NextResponse.json({ error: "Decision record not found." }, { status: 404 });
   if (message.includes("_REQUIRED")) return NextResponse.json({ error: "Complete the required governance fields." }, { status: 400 });
   if (message.includes("_INVALID")) return NextResponse.json({ error: "One or more governance values are invalid." }, { status: 400 });
   console.error(error);
@@ -86,11 +84,18 @@ export async function DELETE(request: Request) {
     const session = await adminSession();
     const url = new URL(request.url);
     const id = String(url.searchParams.get("id") || "").trim();
-    const type = String(url.searchParams.get("type") || "system");
     if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
-    if (type === "system") await deleteAiSystem(session, id, request);
-    else if (type === "decision") await deleteDecision(session, id, request);
-    else return NextResponse.json({ error: "Unknown governance record type." }, { status: 400 });
+
+    const [evidence] = await sql(`
+      select
+        (select count(*)::int from ai_decision_records where org_id=$1 and system_id=$2) as decisions,
+        (select count(*)::int from ai_assurance_evaluations where org_id=$1 and system_id=$2) as evaluations
+    `, [session.orgId, id]);
+    if (Number(evidence?.decisions || 0) || Number(evidence?.evaluations || 0)) {
+      return NextResponse.json({ error: "This AI system has append-only governance evidence. Retire the system instead of deleting it." }, { status: 409 });
+    }
+
+    await deleteAiSystem(session, id, request);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return responseForError(error);
