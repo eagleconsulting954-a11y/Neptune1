@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "@types/node": "^20.19.26",
+    "@types/node": "^26.6.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@types/pg": "^8.11.10",
